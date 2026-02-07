@@ -1,0 +1,16 @@
+{
+  "name": "Figma to Code",
+  "id": "figma-to-code-mcp",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["none"],
+    "devAllowedDomains": [
+      "ws://localhost:3001",
+      "wss://localhost:3001"
+    ],
+    "reasoning": "Connect to local MCP server via WebSocket"
+  }
+}

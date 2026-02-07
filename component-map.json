@@ -1,0 +1,152 @@
+{
+  "rules": [
+    {
+      "match": {
+        "type": "instance",
+        "componentName": "Button/*"
+      },
+      "map": {
+        "component": "Button",
+        "import": "@/components/Button",
+        "propsMapping": {
+          "variant": "$variantProps.variant",
+          "size": "$variantProps.size",
+          "disabled": "$variantProps.state === 'disabled'",
+          "children": "$findChild(TEXT).characters"
+        }
+      }
+    },
+    {
+      "match": {
+        "type": "instance",
+        "componentName": "Input/*"
+      },
+      "map": {
+        "component": "TextInput",
+        "import": "react-native",
+        "propsMapping": {
+          "placeholder": "$findChild(TEXT).characters",
+          "secureTextEntry": "$variantProps.type === 'password'"
+        }
+      }
+    },
+    {
+      "match": {
+        "type": "instance",
+        "componentName": "Avatar/*"
+      },
+      "map": {
+        "component": "Avatar",
+        "import": "@/components/Avatar",
+        "propsMapping": {
+          "size": "$variantProps.size",
+          "source": "$findChild(IMAGE).imageHash"
+        }
+      }
+    },
+    {
+      "match": {
+        "type": "instance",
+        "componentName": "Card/*"
+      },
+      "map": {
+        "component": "Card",
+        "import": "@/components/Card",
+        "wrapChildren": true
+      }
+    },
+    {
+      "match": {
+        "type": "name-pattern",
+        "pattern": "^icon[-/](.+)$"
+      },
+      "map": {
+        "component": "Icon",
+        "import": "@/components/Icon",
+        "propsMapping": {
+          "name": "$match[1]",
+          "size": "$node.width",
+          "color": "$node.fills[0].color"
+        }
+      }
+    },
+    {
+      "match": {
+        "type": "name-pattern",
+        "pattern": "^img[-/](.+)$"
+      },
+      "map": {
+        "component": "Image",
+        "import": "react-native",
+        "propsMapping": {
+          "source": "$exportAsset",
+          "style": "{ width: $node.width, height: $node.height }"
+        }
+      }
+    },
+    {
+      "match": {
+        "type": "structure",
+        "heuristic": "button-like"
+      },
+      "map": {
+        "component": "TouchableOpacity",
+        "import": "react-native",
+        "wrapChildren": true,
+        "propsMapping": {
+          "activeOpacity": "0.7"
+        }
+      }
+    },
+    {
+      "match": {
+        "type": "structure",
+        "heuristic": "input-like"
+      },
+      "map": {
+        "component": "TextInput",
+        "import": "react-native",
+        "propsMapping": {
+          "placeholder": "$findChild(TEXT).characters"
+        }
+      }
+    },
+    {
+      "match": {
+        "type": "structure",
+        "heuristic": "list-like"
+      },
+      "map": {
+        "component": "FlatList",
+        "import": "react-native",
+        "propsMapping": {
+          "data": "$children",
+          "renderItem": "$generateListItem"
+        }
+      }
+    }
+  ],
+  "fallback": {
+    "FRAME": "View",
+    "GROUP": "View",
+    "RECTANGLE": "View",
+    "ELLIPSE": "View",
+    "TEXT": "Text",
+    "VECTOR": "Svg",
+    "BOOLEAN_OPERATION": "Svg",
+    "LINE": "View",
+    "INSTANCE": "View",
+    "COMPONENT": "View",
+    "IMAGE": "Image"
+  },
+  "imports": {
+    "View": "react-native",
+    "Text": "react-native",
+    "Image": "react-native",
+    "TouchableOpacity": "react-native",
+    "TextInput": "react-native",
+    "FlatList": "react-native",
+    "ScrollView": "react-native",
+    "Svg": "react-native-svg"
+  }
+}
