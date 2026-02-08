@@ -2,13 +2,13 @@
 
 ## 背景
 
-作为资深前端开发工程师，不应该把大量时间浪费在画非常简单的页面。
+不想把时间浪费在画非常简单的页面上。
 
 ## 功能介绍
 
-本项目是一个 Figma 插件 + MCP Server 解决方案，让 Claude Code 能够实时获取 Figma 设计稿数据并生成代码。
+本项目是一个 Figma 插件 + MCP Server 解决方案，让支持 MCP 协议的 AI 编程工具（如 Claude Code、OpenCode 等）能够实时获取 Figma 设计稿数据并生成代码。
 
-**核心优势**：使用 Figma Plugin API 而非 REST API，绑过 Figma 普通账号每月 6 次的 API 调用限制。
+**核心优势**：使用 Figma Plugin API 而非 REST API。
 
 ## 项目结构
 
@@ -66,9 +66,13 @@ cd ../mcp-server && npm run build
 2. 进入 Plugins > Development > Import plugin from manifest...
 3. 选择 `plugin/manifest.json`
 
-### 4. 配置 Claude Code
+### 4. 配置 AI 编程工具
 
-在 `~/.claude/settings.json` 中添加 MCP Server 配置：
+MCP Server 通过 stdio 协议与 AI 工具通信，由 AI 工具自动启动为子进程，无需手动运行。
+
+#### Claude Code
+
+在 `~/.claude/settings.json` 中添加：
 
 ```json
 {
@@ -81,10 +85,27 @@ cd ../mcp-server && npm run build
 }
 ```
 
+#### OpenCode
+
+在 OpenCode 配置文件中添加（通常为 `~/.config/opencode/config.json`）：
+
+```json
+{
+    "mcpServers": {
+        "figma": {
+            "command": "node",
+            "args": ["/path/to/figma-plugin/mcp-server/dist/index.js"]
+        }
+    }
+}
+```
+
+> 配置完成后，AI 工具启动时会自动拉起 MCP Server（含 WebSocket 服务），无需手动 `npm start`。
+
 ### 5. 启动使用
 
 ```bash
-# 启动 MCP Server（会同时启动 WebSocket 服务）
+# 启动 MCP Server（开发调试时手动运行，正常使用由 AI 工具自动启动）
 cd mcp-server && npm start
 ```
 
@@ -92,8 +113,8 @@ cd mcp-server && npm start
 
 1. 在 Figma 中打开插件
 2. 点击"连接服务器"
-3. 选中 Figma 图层
-4. 在 Claude Code 中请求生成代码
+3. 选中 Figma 图层（自动同步到 MCP Server）
+4. 在 AI 编程工具中请求生成代码
 
 ## 配置说明
 
@@ -101,24 +122,45 @@ cd mcp-server && npm start
 
 ```json
 {
-    "framework": "react-native", // 目标框架
+    "framework": "react-native",
     "styling": {
-        "type": "stylesheet", // 样式方案
-        "unit": "dp" // 尺寸单位
+        "type": "stylesheet",
+        "unit": "dp"
     },
     "output": {
         "componentDir": "./src/components",
+        "screenDir": "./src/screens",
         "assetDir": "./src/assets"
     },
-    "rules": "./code-rules.md", // 代码规则文件
-    "componentMap": "./component-map.json" // 组件映射
+    "assets": {
+        "images": {
+            "outputDir": "./src/assets/images",
+            "naming": "kebab-case",
+            "scales": [1, 2, 3],
+            "reference": "require"
+        },
+        "icons": {
+            "strategy": "icon-component",
+            "componentImport": "@/components/Icon",
+            "svgDir": "./src/assets/icons"
+        }
+    },
+    "rules": "./code-rules.md",
+    "projectRules": ".figma-rules.md",
+    "componentMap": "./component-map.json"
 }
 ```
 
 ### code-rules.md
 
-定义代码生成的规范，包括：
+定义代码生成的规范，采用**两层规则机制**：
 
+-   **通用规则**（`code-rules.md`）：适用于所有项目的默认规范
+-   **项目级规则**（`.figma-rules.md`）：放在目标项目根目录，可覆盖/补充通用规则，优先级更高
+
+规则内容包括：
+
+-   **工作流规则**：生成代码前必须先展示方案并等待用户确认
 -   命名规范
 -   布局偏好
 -   组件拆分策略
@@ -143,19 +185,20 @@ cd mcp-server && npm start
 
 ## 使用示例
 
-在 Claude Code 中：
+在 AI 编程工具中：
 
 ```
 我想把当前 Figma 选中的登录页面生成 React Native 代码
 ```
 
-Claude 会自动：
+AI 会自动：
 
 1. 调用 `get_project_config` 获取配置
 2. 调用 `get_code_rules` 获取代码规范
 3. 调用 `get_figma_selection` 获取设计数据
-4. 根据配置和规则生成代码
-5. 调用 `save_generated_code` 保存到项目
+4. 分析节点结构，展示组件拆分方案
+5. **等待用户确认方案**后再生成代码
+6. 调用 `save_generated_code` 保存到项目
 
 ## 开发模式
 

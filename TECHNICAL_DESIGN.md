@@ -2,9 +2,7 @@
 
 ## 概述
 
-本项目实现一个 Figma 插件 + MCP Server 的解决方案，让 Claude Code 能够实时获取 Figma 设计稿数据并生成代码。
-
-**核心优势**：使用 Figma Plugin API 而非 REST API，绑过每月 6 次的调用限制。
+本项目实现一个 Figma 插件 + MCP Server 的解决方案，让支持 MCP 协议的 AI 编程工具（如 Claude Code、OpenCode 等）能够实时获取 Figma 设计稿数据并生成代码。
 
 ## 系统架构
 
@@ -34,8 +32,8 @@
                                               │ stdio
                                               ▼
 ┌────────────────────────────────────────────────────────────────────┐
-│                         Claude Code                                │
-│  调用 MCP 工具获取 Figma 数据 → 分析布局 → 生成代码                │
+│                         Claude Code / OpenCode                     │
+│  调用 MCP 工具获取 Figma 数据 → 分析布局 → 确认方案 → 生成代码     │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -58,10 +56,15 @@ figma-plugin/
 │   │   ├── index.ts             # MCP 入口
 │   │   ├── websocket-server.ts  # WebSocket 服务
 │   │   ├── figma-tools.ts       # MCP 工具定义
-│   │   └── data-store.ts        # 数据缓存
+│   │   ├── data-store.ts        # 数据缓存
+│   │   └── types.ts             # 共享类型定义
 │   ├── package.json
 │   └── tsconfig.json
 │
+├── figma-to-code.config.json    # 项目配置
+├── code-rules.md                # 代码生成规则（通用）
+├── component-map.json           # 组件映射配置
+├── .gitignore                   # Git 忽略规则
 ├── TECHNICAL_DESIGN.md          # 本文档
 └── README.md
 ```
@@ -650,17 +653,38 @@ export const customLogic = () => {
     },
     "output": {
         "componentDir": "./src/components",
+        "screenDir": "./src/screens",
         "assetDir": "./src/assets"
     },
+    "assets": {
+        "images": {
+            "outputDir": "./src/assets/images",
+            "naming": "kebab-case",
+            "scales": [1, 2, 3],
+            "reference": "require"
+        },
+        "icons": {
+            "strategy": "icon-component",
+            "componentImport": "@/components/Icon",
+            "svgDir": "./src/assets/icons"
+        }
+    },
     "rules": "./code-rules.md",
+    "projectRules": ".figma-rules.md",
     "componentMap": "./component-map.json"
 }
 ```
 
 ### 代码规则 `code-rules.md`
 
-用户可自定义的规则文件，包含：
+采用**两层规则机制**：
 
+-   **通用规则**（`code-rules.md`）：适用于所有项目的默认规范
+-   **项目级规则**（`.figma-rules.md`）：放在目标项目根目录，可覆盖/补充通用规则，优先级更高
+
+规则内容包括：
+
+-   **工作流规则**：生成代码前必须先展示方案并等待用户确认
 -   命名规范
 -   布局偏好
 -   组件拆分策略
@@ -670,21 +694,25 @@ export const customLogic = () => {
 
 ## MCP 工具列表
 
-| 工具名                  | 说明                              |
-| ----------------------- | --------------------------------- |
-| `get_figma_selection`   | 获取当前 Figma 选中的节点完整数据 |
-| `get_project_config`    | 读取项目的代码生成配置            |
-| `get_code_rules`        | 读取用户定义的代码规则            |
-| `get_component_mapping` | 获取组件映射关系                  |
-| `check_figma_changes`   | 检查设计变更                      |
-| `save_generated_code`   | 保存生成的代码                    |
+| 工具名                  | 说明                                   |
+| ----------------------- | -------------------------------------- |
+| `get_figma_selection`   | 获取当前 Figma 选中的节点完整数据      |
+| `get_project_config`    | 读取项目的代码生成配置                 |
+| `get_code_rules`        | 读取用户定义的代码规则（支持两层规则） |
+| `get_component_mapping` | 获取组件映射关系                       |
+| `check_figma_changes`   | 检查设计变更                           |
+| `save_generated_code`   | 保存生成的代码并更新同步记录           |
+| `save_asset`            | 保存导出的资源文件（图片、图标等）     |
+| `get_server_status`     | 获取服务状态和连接信息                 |
 
 ---
 
 ## 使用流程
 
-1. 启动 MCP Server
-2. 在 Figma 中打开插件
-3. 选中需要转换的节点
-4. 在 Claude Code 中请求生成代码
-5. Claude 自动调用 MCP 工具获取数据并生成代码
+1. 配置 AI 编程工具（Claude Code / OpenCode），MCP Server 由工具自动启动
+2. 在 Figma 中打开插件，点击"连接服务器"
+3. 选中需要转换的节点（自动同步到 MCP Server）
+4. 在 AI 编程工具中请求生成代码
+5. AI 调用 MCP 工具获取数据，分析节点结构
+6. AI 展示组件拆分方案，**等待用户确认**
+7. 用户确认后，AI 生成代码并保存到项目
