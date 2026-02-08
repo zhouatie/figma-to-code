@@ -7,7 +7,7 @@
 >
 > 1. 本文件（通用基础）
 > 2. 框架规则（`framework-rules/<framework>.md`）
-> 3. 项目级规则（`.figma-rules.md`）
+> 3. 项目级规则（`.aiwork/figma-rules.md`）
 >
 > 优先级递增，后者覆盖前者。
 
@@ -205,4 +205,113 @@ src/<pagesDir>/<pageName>/
 -   [ ] **类型安全**：Props 是否定义了 interface？是否避免了 `any`？
 -   [ ] **Hooks**：传给子组件的回调是否用 `useCallback` 包裹？
 -   [ ] **框架规则**：是否遵守了对应框架的特定规则？
--   [ ] **项目级规则**：是否遵守了 `.figma-rules.md` 中的额外约定？
+-   [ ] **项目级规则**：是否遵守了 `.aiwork/figma-rules.md` 中的额外约定？
+
+---
+
+## 9. 交互代码生成规则
+
+当需要生成带交互逻辑的代码时（不仅仅是静态 UI），遵循以下规则：
+
+### 前置条件
+
+1. **必须先读取技术方案**：使用 `get_tech_design` 获取技术方案
+2. **必须先读取交互文档**：使用 `get_interaction_spec` 获取交互说明（如有）
+3. **必须先读取 API 文档**：使用 `get_api_spec` 获取接口定义（如有）
+
+### 状态管理规范
+
+根据项目配置的 `stateManagement` 字段选择状态管理方案：
+
+#### Zustand（推荐）
+
+```typescript
+// store/<pageName>Store.ts
+import { create } from 'zustand';
+
+interface PageState {
+    // 状态字段
+    isLoading: boolean;
+    data: DataType | null;
+    error: string | null;
+
+    // 操作方法
+    fetchData: () => Promise<void>;
+    reset: () => void;
+}
+
+export const usePageStore = create<PageState>((set, get) => ({
+    isLoading: false,
+    data: null,
+    error: null,
+
+    fetchData: async () => {
+        set({ isLoading: true, error: null });
+        try {
+            const data = await api.getData();
+            set({ data, isLoading: false });
+        } catch (error) {
+            set({ error: error.message, isLoading: false });
+        }
+    },
+
+    reset: () => set({ isLoading: false, data: null, error: null }),
+}));
+```
+
+### 网络请求规范
+
+根据项目配置的 `networkLib` 字段选择网络库：
+
+#### Axios
+
+```typescript
+// services/api.ts
+import axios from 'axios';
+
+const instance = axios.create({
+    baseURL: '/api',
+    timeout: 10000,
+});
+
+export const userApi = {
+    login: (credentials: Credentials) =>
+        instance.post<LoginResponse>('/auth/login', credentials),
+
+    getProfile: () => instance.get<UserProfile>('/user/profile'),
+};
+```
+
+### 导航规范
+
+根据项目配置的 `navigation` 字段选择导航方案：
+
+#### React Navigation
+
+```typescript
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+type RootStackParamList = {
+    Home: undefined;
+    Detail: { id: string };
+};
+
+const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+// 导航操作
+navigation.navigate('Detail', { id: '123' });
+navigation.goBack();
+```
+
+### 交互代码检查清单
+
+生成交互代码后，额外确认：
+
+-   [ ] **状态管理**：是否使用了项目配置的状态管理方案？
+-   [ ] **API 调用**：是否遵循了 API 文档定义的接口规范？
+-   [ ] **错误处理**：是否处理了加载状态、错误状态？
+-   [ ] **导航逻辑**：是否使用了项目配置的导航方案？
+-   [ ] **类型定义**：API 响应类型是否与 API 文档一致？
+-   [ ] **文件保存**：使用 `save_generated_code` 时，`code` 参数是否包含完整的文件内容？禁止传入占位注释或摘要文本，该工具会覆盖目标文件。

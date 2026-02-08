@@ -1,0 +1,22 @@
+{
+  "projectName": "my-project",
+  "framework": "react-native",
+  "styling": {
+    "type": "stylesheet",
+    "unit": "dp"
+  },
+  "output": {
+    "componentDir": "./src/components",
+    "screenDir": "./src/screens",
+    "assetDir": "./src/assets"
+  },
+  "stateManagement": "zustand",
+  "networkLib": "axios",
+  "navigation": "react-navigation",
+  "docs": {
+    "requirementsDir": "requirements",
+    "designsDir": "designs",
+    "interactionsDir": "interactions",
+    "apiDir": "api"
+  }
+}

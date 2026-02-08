@@ -1,12 +1,16 @@
 {
-  "name": "figma-to-code-mcp",
-  "version": "1.0.0",
-  "description": "MCP Server for Figma to Code - receives design data from Figma plugin",
+  "name": "aiwork-mcp",
+  "version": "2.0.0",
+  "description": "AI Work MCP Server - PRD to Tech Design to Figma to Code",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "figma-mcp": "./dist/index.js"
+    "aiwork-mcp": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "defaults"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
