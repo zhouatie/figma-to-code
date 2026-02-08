@@ -11,6 +11,7 @@ import {
     writeFileSync,
     mkdirSync,
     statSync,
+    readdirSync,
 } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { createHash } from 'crypto';
@@ -111,31 +112,34 @@ export const tools = [
     // 3. 获取代码规则
     {
         name: 'get_code_rules',
-        description: `读取用户定义的代码生成规则 (markdown 文件)。
-支持两层规则：
-1. 通用默认规则（code-rules.md，适用于所有项目）
-2. 项目级规则（默认 .figma-rules.md，放在目标项目根目录，覆盖/补充通用规则）
-返回合并后的规则内容。项目级规则优先级更高。`,
+        description: `读取代码生成规则 (markdown 文件)。
+支持三层规则合并：
+1. 通用基础规则（code-rules.md，框架无关）
+2. 框架规则（framework-rules/<framework>.md，如 react-native.md）
+3. 项目级规则（.figma-rules.md，放在目标项目根目录）
+返回合并后的规则内容。优先级递增，后者覆盖前者。`,
         inputSchema: {
             type: 'object' as const,
             properties: {
-                rulesPath: {
+                framework: {
                     type: 'string',
-                    description: '通用规则文件路径，默认从配置文件中读取',
+                    description:
+                        '目标框架（如 react-native、react、flutter），默认从配置文件读取',
                 },
                 projectRulesPath: {
                     type: 'string',
-                    description:
-                        '项目级规则文件路径，默认从配置文件中读取（projectRules 字段）。传入目标项目的根目录路径也可自动查找 .figma-rules.md',
+                    description: '项目级规则文件路径或目标项目根目录路径',
                 },
             },
         },
         handler: async (args: {
-            rulesPath?: string;
+            framework?: string;
             projectRulesPath?: string;
         }) => {
-            let rulesPath = args.rulesPath;
+            let framework = args.framework;
             let projectRulesPath = args.projectRulesPath;
+            let baseRulesPath = './code-rules.md';
+            let frameworkRulesDir = './framework-rules';
 
             const configPath = './figma-to-code.config.json';
             if (existsSync(configPath)) {
@@ -143,29 +147,40 @@ export const tools = [
                     const config: ProjectConfig = JSON.parse(
                         readFileSync(configPath, 'utf-8'),
                     );
-                    if (!rulesPath) rulesPath = config.rules;
+                    if (!framework) framework = config.framework;
+                    if (config.rules) baseRulesPath = config.rules;
+                    if (config.frameworkRulesDir)
+                        frameworkRulesDir = config.frameworkRulesDir;
                     if (!projectRulesPath)
                         projectRulesPath = config.projectRules;
                 } catch {}
             }
 
-            rulesPath = rulesPath || './code-rules.md';
-            const baseFullPath = resolve(rulesPath);
+            framework = framework || 'react-native';
+
             let baseRules = '';
+            let frameworkRules = '';
+            let projectRules = '';
+            let baseFullPath = resolve(baseRulesPath);
+            let frameworkFullPath = '';
+            let projectFullPath = '';
 
             if (existsSync(baseFullPath)) {
                 try {
                     baseRules = readFileSync(baseFullPath, 'utf-8');
-                } catch (error) {
-                    return {
-                        success: false,
-                        error: `Failed to read base rules: ${error instanceof Error ? error.message : String(error)}`,
-                    };
-                }
+                } catch {}
             }
 
-            let projectRules = '';
-            let projectRulesFullPath = '';
+            const frameworkRulesPath = join(
+                resolve(frameworkRulesDir),
+                `${framework}.md`,
+            );
+            if (existsSync(frameworkRulesPath)) {
+                try {
+                    frameworkRules = readFileSync(frameworkRulesPath, 'utf-8');
+                    frameworkFullPath = frameworkRulesPath;
+                } catch {}
+            }
 
             if (projectRulesPath) {
                 let candidatePath = resolve(projectRulesPath);
@@ -180,34 +195,42 @@ export const tools = [
                         }
                     } catch {}
                 }
-
                 if (existsSync(candidatePath)) {
                     try {
                         projectRules = readFileSync(candidatePath, 'utf-8');
-                        projectRulesFullPath = candidatePath;
+                        projectFullPath = candidatePath;
                     } catch {}
                 }
             }
 
-            if (!baseRules && !projectRules) {
+            if (!baseRules && !frameworkRules && !projectRules) {
                 return {
                     success: false,
                     error: 'No rules files found.',
                     suggestion:
-                        'Create a code-rules.md (base rules) and/or .figma-rules.md (project rules).',
+                        'Create code-rules.md and/or framework-rules/<framework>.md',
                 };
             }
 
-            const mergedRules = projectRules
-                ? `${baseRules}\n\n---\n\n# 项目级规则（覆盖/补充上述通用规则）\n\n> 以下规则来自项目级配置（${projectRulesFullPath}），优先级高于通用规则。\n\n${projectRules}`
-                : baseRules;
+            let mergedRules = baseRules;
+
+            if (frameworkRules) {
+                mergedRules += `\n\n---\n\n# ${framework} 框架规则\n\n> 以下规则来自框架配置（${frameworkFullPath}）\n\n${frameworkRules}`;
+            }
+
+            if (projectRules) {
+                mergedRules += `\n\n---\n\n# 项目级规则\n\n> 以下规则来自项目配置（${projectFullPath}），优先级最高\n\n${projectRules}`;
+            }
 
             return {
                 success: true,
                 rules: mergedRules,
-                baseRulesPath: existsSync(baseFullPath) ? baseFullPath : null,
-                projectRulesPath: projectRulesFullPath || null,
-                hasProjectRules: !!projectRules,
+                framework,
+                layers: {
+                    base: existsSync(baseFullPath) ? baseFullPath : null,
+                    framework: frameworkFullPath || null,
+                    project: projectFullPath || null,
+                },
             };
         },
     },
@@ -215,48 +238,63 @@ export const tools = [
     // 4. 获取组件映射
     {
         name: 'get_component_mapping',
-        description: `获取 Figma 组件到项目组件的映射配置。
-用于将 Figma 中的组件实例映射到项目中的实际组件。`,
+        description: `获取 Figma 组件到目标框架组件的映射配置。
+根据配置的 framework 自动加载对应的组件映射文件（component-maps/<framework>.json）。`,
         inputSchema: {
             type: 'object' as const,
             properties: {
-                mappingPath: {
+                framework: {
                     type: 'string',
-                    description: '映射文件路径，默认从配置文件中读取',
+                    description:
+                        '目标框架（如 react-native、react、flutter），默认从配置文件读取',
                 },
             },
         },
-        handler: async (args: { mappingPath?: string }) => {
-            let mappingPath = args.mappingPath;
+        handler: async (args: { framework?: string }) => {
+            let framework = args.framework;
+            let componentMapsDir = './component-maps';
 
-            if (!mappingPath) {
-                const configPath = './figma-to-code.config.json';
-                if (existsSync(configPath)) {
-                    try {
-                        const config: ProjectConfig = JSON.parse(
-                            readFileSync(configPath, 'utf-8'),
-                        );
-                        mappingPath = config.componentMap;
-                    } catch {}
-                }
+            const configPath = './figma-to-code.config.json';
+            if (existsSync(configPath)) {
+                try {
+                    const config: ProjectConfig = JSON.parse(
+                        readFileSync(configPath, 'utf-8'),
+                    );
+                    if (!framework) framework = config.framework;
+                    if (config.componentMapsDir)
+                        componentMapsDir = config.componentMapsDir;
+                } catch {}
             }
 
-            mappingPath = mappingPath || './component-map.json';
-            const fullPath = resolve(mappingPath);
+            framework = framework || 'react-native';
 
-            if (!existsSync(fullPath)) {
+            const mappingPath = join(
+                resolve(componentMapsDir),
+                `${framework}.json`,
+            );
+
+            if (!existsSync(mappingPath)) {
                 return {
                     success: false,
-                    error: `Component mapping file not found: ${fullPath}`,
-                    suggestion:
-                        'Create a component-map.json file to define mappings.',
+                    error: `Component mapping file not found for framework "${framework}": ${mappingPath}`,
+                    suggestion: `Create ${componentMapsDir}/${framework}.json to define component mappings.`,
+                    availableFrameworks: existsSync(resolve(componentMapsDir))
+                        ? readdirSync(resolve(componentMapsDir))
+                              .filter((f: string) => f.endsWith('.json'))
+                              .map((f: string) => f.replace('.json', ''))
+                        : [],
                 };
             }
 
             try {
-                const content = readFileSync(fullPath, 'utf-8');
+                const content = readFileSync(mappingPath, 'utf-8');
                 const mapping: ComponentMap = JSON.parse(content);
-                return { success: true, mapping, mappingPath: fullPath };
+                return {
+                    success: true,
+                    mapping,
+                    framework,
+                    mappingPath,
+                };
             } catch (error) {
                 return {
                     success: false,

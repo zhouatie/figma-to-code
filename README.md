@@ -31,9 +31,14 @@ figma-plugin/
 │   │   └── data-store.ts        # 数据缓存
 │   └── package.json
 │
+├── framework-rules/             # 框架特定规则
+│   └── react-native.md          # React Native 规则
+│
+├── component-maps/              # 框架组件映射
+│   └── react-native.json        # React Native 组件映射
+│
 ├── figma-to-code.config.json    # 项目配置
-├── code-rules.md                # 代码生成规则
-├── component-map.json           # 组件映射配置
+├── code-rules.md                # 通用代码生成规则（框架无关）
 ├── TECHNICAL_DESIGN.md          # 技术设计文档
 └── README.md
 ```
@@ -146,29 +151,43 @@ cd mcp-server && npm start
         }
     },
     "rules": "./code-rules.md",
-    "projectRules": ".figma-rules.md",
-    "componentMap": "./component-map.json"
+    "frameworkRulesDir": "./framework-rules",
+    "componentMapsDir": "./component-maps",
+    "projectRules": ".figma-rules.md"
 }
 ```
 
 ### code-rules.md
 
-定义代码生成的规范，采用**两层规则机制**：
+定义代码生成的规范，采用**三层规则机制**：
 
--   **通用规则**（`code-rules.md`）：适用于所有项目的默认规范
--   **项目级规则**（`.figma-rules.md`）：放在目标项目根目录，可覆盖/补充通用规则，优先级更高
+1. **通用基础规则**（`code-rules.md`）：框架无关的通用规范（目录结构、命名、代码质量等）
+2. **框架规则**（`framework-rules/<framework>.md`）：框架特定规则（如 React Native 的 StyleSheet、View/Text 等）
+3. **项目级规则**（`.figma-rules.md`）：放在目标项目根目录，可覆盖/补充上述规则，优先级最高
 
 规则内容包括：
 
--   **工作流规则**：生成代码前必须先展示方案并等待用户确认
--   命名规范
--   布局偏好
--   组件拆分策略
--   框架特定规则
+- **工作流规则**：生成代码前必须先展示方案并等待用户确认
+- 命名规范
+- 布局偏好
+- 组件拆分策略
+- 框架特定规则
 
-### component-map.json
+### framework-rules/
 
-定义 Figma 组件到项目组件的映射关系。
+框架特定的代码生成规则，按框架命名：
+
+- `react-native.md` - React Native 规则（StyleSheet、View/Text、FlatList 等）
+- `react.md` - React/Web 规则（待添加）
+- `flutter.md` - Flutter 规则（待添加）
+
+### component-maps/
+
+框架特定的组件映射配置，按框架命名：
+
+- `react-native.json` - Figma 节点到 RN 组件的映射
+- `react.json` - Figma 节点到 React/Web 组件的映射（待添加）
+- `flutter.json` - Figma 节点到 Flutter Widget 的映射（待添加）
 
 ## MCP 工具列表
 
