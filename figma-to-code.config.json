@@ -13,11 +13,7 @@
         "images": {
             "outputDir": "./src/assets/images",
             "naming": "kebab-case",
-            "scales": [
-                1,
-                2,
-                3
-            ],
+            "scales": [1, 2, 3],
             "reference": "require"
         },
         "icons": {
@@ -27,6 +23,7 @@
         }
     },
     "rules": "./code-rules.md",
-    "projectRules": ".figma-rules.md",
-    "componentMap": "./component-map.json"
+    "frameworkRulesDir": "./framework-rules",
+    "componentMapsDir": "./component-maps",
+    "projectRules": ".figma-rules.md"
 }

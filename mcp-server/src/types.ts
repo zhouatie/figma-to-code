@@ -139,8 +139,9 @@ export interface ProjectConfig {
     assetDir: string;
   };
   rules?: string;
+  frameworkRulesDir?: string;
+  componentMapsDir?: string;
   projectRules?: string;
-  componentMap?: string;
 }
 
 // 组件映射规则
