@@ -300,7 +300,7 @@ import CardItem from './components/CardItem';
 ### 触摸交互
 
 -   可点击元素使用 `TouchableOpacity` 或 `Pressable`
--   提供 `activeOpacity={0.7}` 反馈
+-   提供 `activeOpacity={0.8}` 反馈
 -   避免嵌套可点击元素
 
 ### 列表选择
