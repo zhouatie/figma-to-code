@@ -191,3 +191,100 @@ export interface NodeChange {
   newHash?: string;
   affectedFiles: string[];
 }
+
+// ============================================================
+// AI 工作区配置 (.aiwork/)
+// ============================================================
+
+/**
+ * .aiwork/config.json 配置结构
+ */
+export interface WorkspaceConfig {
+  /** 项目名称 */
+  projectName: string;
+
+  /** 框架配置 */
+  framework: 'react-native' | 'react' | 'vue' | 'flutter' | string;
+
+  /** 样式配置 */
+  styling: {
+    type: 'stylesheet' | 'inline' | 'tailwind' | 'styled-components';
+    unit: 'px' | 'dp' | 'rem';
+  };
+
+  /** 输出目录配置 */
+  output: {
+    componentDir: string;
+    screenDir?: string;
+    assetDir: string;
+  };
+
+  /** 资源配置 */
+  assets?: {
+    images?: {
+      outputDir: string;
+      naming: 'kebab-case' | 'camelCase' | 'snake_case';
+      scales?: number[];
+      reference: 'require' | 'import' | 'uri';
+    };
+    icons?: {
+      strategy: 'inline-svg' | 'icon-component' | 'font';
+      componentImport?: string;
+      svgDir?: string;
+    };
+  };
+
+  /** 状态管理 */
+  stateManagement?: 'zustand' | 'redux' | 'mobx' | 'jotai' | 'context' | string;
+
+  /** 网络库 */
+  networkLib?: 'axios' | 'fetch' | 'ky' | string;
+
+  /** 路由/导航 */
+  navigation?: 'react-navigation' | 'expo-router' | 'react-router' | string;
+
+  /** 文档配置 */
+  docs?: {
+    /** 需求文档目录 */
+    requirementsDir?: string;
+    /** 技术方案目录 */
+    designsDir?: string;
+    /** 交互文档目录 */
+    interactionsDir?: string;
+    /** API 文档目录 */
+    apiDir?: string;
+  };
+}
+
+/**
+ * 工作区文件类型
+ */
+export type WorkspaceFileType =
+  | 'config'           // config.json
+  | 'figma-rules'      // figma-rules.md
+  | 'tech-rules'       // tech-design-rules.md
+  | 'requirement'      // requirements/*.md
+  | 'design'           // designs/*.md
+  | 'interaction'      // interactions/*.md
+  | 'api';             // api/*.md
+
+/**
+ * 工作区文件信息
+ */
+export interface WorkspaceFile {
+  type: WorkspaceFileType;
+  path: string;
+  name: string;
+  exists: boolean;
+  lastModified?: string;
+}
+
+/**
+ * 工作区状态
+ */
+export interface WorkspaceStatus {
+  initialized: boolean;
+  configPath: string;
+  config?: WorkspaceConfig;
+  files: WorkspaceFile[];
+}

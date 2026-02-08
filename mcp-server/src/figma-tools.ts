@@ -2,7 +2,6 @@
 // MCP 工具定义 - 提供给 Claude Code 调用
 // ============================================================
 
-import { z } from 'zod';
 import { dataStore } from './data-store.js';
 import { getConnectionCount } from './websocket-server.js';
 import {
@@ -10,18 +9,44 @@ import {
     existsSync,
     writeFileSync,
     mkdirSync,
-    statSync,
     readdirSync,
 } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { createHash } from 'crypto';
 import type {
     FigmaNodeData,
-    ProjectConfig,
+    WorkspaceConfig,
     ComponentMap,
     SyncMapping,
     NodeChange,
 } from './types.js';
+
+const WORKSPACE_DIR = '.aiwork';
+const CONFIG_FILE = 'config.json';
+const FIGMA_RULES_FILE = 'figma-rules.md';
+
+function getDefaultsDir(): string {
+    return join(dirname(new URL(import.meta.url).pathname), '..', 'defaults');
+}
+
+function getWorkspacePath(projectRoot: string): string {
+    return join(resolve(projectRoot), WORKSPACE_DIR);
+}
+
+function getConfigPath(projectRoot: string): string {
+    return join(getWorkspacePath(projectRoot), CONFIG_FILE);
+}
+
+function readWorkspaceConfig(projectRoot: string): WorkspaceConfig | null {
+    const configPath = getConfigPath(projectRoot);
+    if (!existsSync(configPath)) return null;
+
+    try {
+        return JSON.parse(readFileSync(configPath, 'utf-8'));
+    } catch {
+        return null;
+    }
+}
 
 // ============================================================
 // 工具定义
@@ -68,44 +93,39 @@ export const tools = [
         },
     },
 
-    // 2. 获取项目配置
+    // 2. 获取项目配置 (已废弃，改用 get_workspace_config)
     {
         name: 'get_project_config',
-        description: `读取项目的代码生成配置文件 (figma-to-code.config.json)。
-配置包括：框架类型、样式方案、输出目录、规则文件路径等。`,
+        description: `[已废弃] 请使用 get_workspace_config 代替。
+此工具保留为向后兼容，会尝试读取 .aiwork/config.json。`,
         inputSchema: {
             type: 'object' as const,
             properties: {
-                configPath: {
+                projectRoot: {
                     type: 'string',
-                    description:
-                        '配置文件路径，默认为当前目录下的 figma-to-code.config.json',
+                    description: '目标项目根目录，默认为当前目录',
                 },
             },
         },
-        handler: async (args: { configPath?: string }) => {
-            const configPath = args.configPath || './figma-to-code.config.json';
-            const fullPath = resolve(configPath);
+        handler: async (args: { projectRoot?: string }) => {
+            const projectRoot = args.projectRoot || '.';
+            const config = readWorkspaceConfig(projectRoot);
 
-            if (!existsSync(fullPath)) {
+            if (!config) {
                 return {
                     success: false,
-                    error: `Config file not found: ${fullPath}`,
-                    suggestion:
-                        'Create a figma-to-code.config.json file in your project root.',
+                    error: 'Workspace not initialized',
+                    suggestion: 'Run init_workspace to create .aiwork/ directory, or use get_workspace_config',
                 };
             }
 
-            try {
-                const content = readFileSync(fullPath, 'utf-8');
-                const config: ProjectConfig = JSON.parse(content);
-                return { success: true, config, configPath: fullPath };
-            } catch (error) {
-                return {
-                    success: false,
-                    error: `Failed to parse config: ${error instanceof Error ? error.message : String(error)}`,
-                };
-            }
+            return {
+                success: true,
+                config,
+                configPath: getConfigPath(projectRoot),
+                deprecated: true,
+                message: 'This tool is deprecated. Please use get_workspace_config instead.',
+            };
         },
     },
 
@@ -113,110 +133,69 @@ export const tools = [
     {
         name: 'get_code_rules',
         description: `读取代码生成规则 (markdown 文件)。
-支持三层规则合并：
-1. 通用基础规则（code-rules.md，框架无关）
-2. 框架规则（framework-rules/<framework>.md，如 react-native.md）
-3. 项目级规则（.figma-rules.md，放在目标项目根目录）
-返回合并后的规则内容。优先级递增，后者覆盖前者。`,
+规则来源：
+1. 默认规则（内置 defaults/code-rules.md）
+2. 框架规则（内置 defaults/framework-rules/<framework>.md，暂未实现）
+3. 项目级规则（.aiwork/figma-rules.md，优先级最高）
+返回合并后的规则内容。`,
         inputSchema: {
             type: 'object' as const,
             properties: {
+                projectRoot: {
+                    type: 'string',
+                    description: '目标项目根目录，默认为当前目录',
+                },
                 framework: {
                     type: 'string',
-                    description:
-                        '目标框架（如 react-native、react、flutter），默认从配置文件读取',
-                },
-                projectRulesPath: {
-                    type: 'string',
-                    description: '项目级规则文件路径或目标项目根目录路径',
+                    description: '目标框架（如 react-native），默认从配置文件读取',
                 },
             },
         },
         handler: async (args: {
+            projectRoot?: string;
             framework?: string;
-            projectRulesPath?: string;
         }) => {
+            const projectRoot = args.projectRoot || '.';
+            const workspacePath = getWorkspacePath(projectRoot);
+            const defaultsDir = getDefaultsDir();
+
             let framework = args.framework;
-            let projectRulesPath = args.projectRulesPath;
-            let baseRulesPath = './code-rules.md';
-            let frameworkRulesDir = './framework-rules';
-
-            const configPath = './figma-to-code.config.json';
-            if (existsSync(configPath)) {
-                try {
-                    const config: ProjectConfig = JSON.parse(
-                        readFileSync(configPath, 'utf-8'),
-                    );
-                    if (!framework) framework = config.framework;
-                    if (config.rules) baseRulesPath = config.rules;
-                    if (config.frameworkRulesDir)
-                        frameworkRulesDir = config.frameworkRulesDir;
-                    if (!projectRulesPath)
-                        projectRulesPath = config.projectRules;
-                } catch {}
+            const config = readWorkspaceConfig(projectRoot);
+            if (!framework && config) {
+                framework = config.framework;
             }
-
             framework = framework || 'react-native';
 
             let baseRules = '';
-            let frameworkRules = '';
             let projectRules = '';
-            let baseFullPath = resolve(baseRulesPath);
-            let frameworkFullPath = '';
+            let baseFullPath = '';
             let projectFullPath = '';
 
-            if (existsSync(baseFullPath)) {
+            const defaultRulesPath = join(defaultsDir, 'code-rules.md');
+            if (existsSync(defaultRulesPath)) {
                 try {
-                    baseRules = readFileSync(baseFullPath, 'utf-8');
+                    baseRules = readFileSync(defaultRulesPath, 'utf-8');
+                    baseFullPath = defaultRulesPath;
                 } catch {}
             }
 
-            const frameworkRulesPath = join(
-                resolve(frameworkRulesDir),
-                `${framework}.md`,
-            );
-            if (existsSync(frameworkRulesPath)) {
+            const projectRulesPath = join(workspacePath, FIGMA_RULES_FILE);
+            if (existsSync(projectRulesPath)) {
                 try {
-                    frameworkRules = readFileSync(frameworkRulesPath, 'utf-8');
-                    frameworkFullPath = frameworkRulesPath;
+                    projectRules = readFileSync(projectRulesPath, 'utf-8');
+                    projectFullPath = projectRulesPath;
                 } catch {}
             }
 
-            if (projectRulesPath) {
-                let candidatePath = resolve(projectRulesPath);
-                if (existsSync(candidatePath)) {
-                    try {
-                        const stat = statSync(candidatePath);
-                        if (stat.isDirectory()) {
-                            candidatePath = join(
-                                candidatePath,
-                                '.figma-rules.md',
-                            );
-                        }
-                    } catch {}
-                }
-                if (existsSync(candidatePath)) {
-                    try {
-                        projectRules = readFileSync(candidatePath, 'utf-8');
-                        projectFullPath = candidatePath;
-                    } catch {}
-                }
-            }
-
-            if (!baseRules && !frameworkRules && !projectRules) {
+            if (!baseRules && !projectRules) {
                 return {
                     success: false,
                     error: 'No rules files found.',
-                    suggestion:
-                        'Create code-rules.md and/or framework-rules/<framework>.md',
+                    suggestion: 'Run init_workspace to create .aiwork/ with default rules',
                 };
             }
 
             let mergedRules = baseRules;
-
-            if (frameworkRules) {
-                mergedRules += `\n\n---\n\n# ${framework} 框架规则\n\n> 以下规则来自框架配置（${frameworkFullPath}）\n\n${frameworkRules}`;
-            }
 
             if (projectRules) {
                 mergedRules += `\n\n---\n\n# 项目级规则\n\n> 以下规则来自项目配置（${projectFullPath}），优先级最高\n\n${projectRules}`;
@@ -227,8 +206,7 @@ export const tools = [
                 rules: mergedRules,
                 framework,
                 layers: {
-                    base: existsSync(baseFullPath) ? baseFullPath : null,
-                    framework: frameworkFullPath || null,
+                    base: baseFullPath || null,
                     project: projectFullPath || null,
                 },
             };
@@ -239,50 +217,46 @@ export const tools = [
     {
         name: 'get_component_mapping',
         description: `获取 Figma 组件到目标框架组件的映射配置。
-根据配置的 framework 自动加载对应的组件映射文件（component-maps/<framework>.json）。`,
+根据框架自动加载对应的组件映射文件（defaults/component-maps/<framework>.json）。`,
         inputSchema: {
             type: 'object' as const,
             properties: {
+                projectRoot: {
+                    type: 'string',
+                    description: '目标项目根目录，默认为当前目录',
+                },
                 framework: {
                     type: 'string',
-                    description:
-                        '目标框架（如 react-native、react、flutter），默认从配置文件读取',
+                    description: '目标框架（如 react-native），默认从配置文件读取',
                 },
             },
         },
-        handler: async (args: { framework?: string }) => {
+        handler: async (args: { projectRoot?: string; framework?: string }) => {
+            const projectRoot = args.projectRoot || '.';
+            const defaultsDir = getDefaultsDir();
+
             let framework = args.framework;
-            let componentMapsDir = './component-maps';
-
-            const configPath = './figma-to-code.config.json';
-            if (existsSync(configPath)) {
-                try {
-                    const config: ProjectConfig = JSON.parse(
-                        readFileSync(configPath, 'utf-8'),
-                    );
-                    if (!framework) framework = config.framework;
-                    if (config.componentMapsDir)
-                        componentMapsDir = config.componentMapsDir;
-                } catch {}
+            const config = readWorkspaceConfig(projectRoot);
+            if (!framework && config) {
+                framework = config.framework;
             }
-
             framework = framework || 'react-native';
 
-            const mappingPath = join(
-                resolve(componentMapsDir),
-                `${framework}.json`,
-            );
+            const componentMapsDir = join(defaultsDir, 'component-maps');
+            const mappingPath = join(componentMapsDir, `${framework}.json`);
 
             if (!existsSync(mappingPath)) {
+                const availableFrameworks = existsSync(componentMapsDir)
+                    ? readdirSync(componentMapsDir)
+                          .filter((f: string) => f.endsWith('.json'))
+                          .map((f: string) => f.replace('.json', ''))
+                    : [];
+
                 return {
                     success: false,
-                    error: `Component mapping file not found for framework "${framework}": ${mappingPath}`,
-                    suggestion: `Create ${componentMapsDir}/${framework}.json to define component mappings.`,
-                    availableFrameworks: existsSync(resolve(componentMapsDir))
-                        ? readdirSync(resolve(componentMapsDir))
-                              .filter((f: string) => f.endsWith('.json'))
-                              .map((f: string) => f.replace('.json', ''))
-                        : [],
+                    error: `Component mapping not found for framework "${framework}"`,
+                    suggestion: `Available frameworks: ${availableFrameworks.join(', ') || 'none'}`,
+                    availableFrameworks,
                 };
             }
 
@@ -507,13 +481,22 @@ export const tools = [
     // 8. 获取服务状态
     {
         name: 'get_server_status',
-        description: `获取 MCP Server 状态，包括 Figma 插件连接状态和数据缓存状态。`,
+        description: `获取 MCP Server 状态，包括 Figma 插件连接状态、数据缓存状态和工作区状态。`,
         inputSchema: {
             type: 'object' as const,
-            properties: {},
+            properties: {
+                projectRoot: {
+                    type: 'string',
+                    description: '目标项目根目录，默认为当前目录',
+                },
+            },
         },
-        handler: async () => {
+        handler: async (args: { projectRoot?: string }) => {
+            const projectRoot = args.projectRoot || '.';
             const stats = dataStore.getStats();
+            const workspacePath = getWorkspacePath(projectRoot);
+            const config = readWorkspaceConfig(projectRoot);
+
             return {
                 success: true,
                 status: {
@@ -522,6 +505,15 @@ export const tools = [
                     hasSelection: stats.hasSelection,
                     historyCount: stats.historyCount,
                     lastUpdate: stats.lastUpdate,
+                },
+                workspace: {
+                    initialized: config !== null,
+                    path: workspacePath,
+                    config: config ? {
+                        projectName: config.projectName,
+                        framework: config.framework,
+                        stateManagement: config.stateManagement,
+                    } : null,
                 },
             };
         },

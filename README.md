@@ -1,4 +1,4 @@
-# Figma to Code
+# AI Work MCP Server (aiwork-mcp)
 
 ## 背景
 
@@ -6,7 +6,17 @@
 
 ## 功能介绍
 
-本项目是一个 Figma 插件 + MCP Server 解决方案，让支持 MCP 协议的 AI 编程工具（如 Claude Code、OpenCode 等）能够实时获取 Figma 设计稿数据并生成代码。
+本项目是一个 **AI 前端开发工作台**，覆盖完整开发流程：
+
+```
+PRD 需求文档 → 技术方案 → Figma 静态 UI → 交互代码
+```
+
+通过 Figma 插件 + MCP Server 解决方案，让支持 MCP 协议的 AI 编程工具（如 Claude Code、OpenCode 等）能够：
+
+- 读取需求文档，生成技术方案
+- 实时获取 Figma 设计稿数据
+- 结合技术方案和 API 文档生成交互代码
 
 **核心优势**：使用 Figma Plugin API 而非 REST API。
 
@@ -15,31 +25,26 @@
 ```
 figma-plugin/
 ├── plugin/                      # Figma 插件
-│   ├── manifest.json            # 插件配置
-│   ├── src/
-│   │   ├── code.ts              # Sandbox 主逻辑
-│   │   ├── ui.tsx               # UI 界面
-│   │   ├── extractor.ts         # 节点数据提取器
-│   │   └── types.ts             # 类型定义
-│   └── package.json
+│   ├── manifest.json
+│   └── src/
 │
-├── mcp-server/                  # MCP 服务端
+├── mcp-server/                  # MCP 服务端 (aiwork-mcp)
 │   ├── src/
 │   │   ├── index.ts             # MCP 入口
 │   │   ├── websocket-server.ts  # WebSocket 服务
-│   │   ├── figma-tools.ts       # MCP 工具定义
-│   │   └── data-store.ts        # 数据缓存
+│   │   ├── figma-tools.ts       # Figma 相关工具
+│   │   ├── workspace-tools.ts   # 工作区工具
+│   │   ├── design-tools.ts      # 文档工具
+│   │   ├── data-store.ts        # 数据缓存
+│   │   └── types.ts             # 类型定义
+│   ├── defaults/                # 默认配置和规则
+│   │   ├── code-rules.md        # 代码生成规则
+│   │   ├── tech-design-rules.md # 技术方案模板
+│   │   ├── config.json          # 默认配置
+│   │   └── component-maps/      # 组件映射
 │   └── package.json
 │
-├── framework-rules/             # 框架特定规则
-│   └── react-native.md          # React Native 规则
-│
-├── component-maps/              # 框架组件映射
-│   └── react-native.json        # React Native 组件映射
-│
-├── figma-to-code.config.json    # 项目配置
-├── code-rules.md                # 通用代码生成规则（框架无关）
-├── TECHNICAL_DESIGN.md          # 技术设计文档
+├── framework-rules/             # 框架特定规则（可选）
 └── README.md
 ```
 
@@ -48,20 +53,14 @@ figma-plugin/
 ### 1. 安装依赖
 
 ```bash
-# 安装插件依赖
 cd plugin && npm install
-
-# 安装 MCP Server 依赖
 cd ../mcp-server && npm install
 ```
 
 ### 2. 构建项目
 
 ```bash
-# 构建插件
 cd plugin && npm run build
-
-# 构建 MCP Server
 cd ../mcp-server && npm run build
 ```
 
@@ -73,8 +72,6 @@ cd ../mcp-server && npm run build
 
 ### 4. 配置 AI 编程工具
 
-MCP Server 通过 stdio 协议与 AI 工具通信，由 AI 工具自动启动为子进程，无需手动运行。
-
 #### Claude Code
 
 在 `~/.claude/settings.json` 中添加：
@@ -82,7 +79,7 @@ MCP Server 通过 stdio 协议与 AI 工具通信，由 AI 工具自动启动为
 ```json
 {
     "mcpServers": {
-        "figma": {
+        "aiwork": {
             "command": "node",
             "args": ["/path/to/figma-plugin/mcp-server/dist/index.js"]
         }
@@ -92,12 +89,12 @@ MCP Server 通过 stdio 协议与 AI 工具通信，由 AI 工具自动启动为
 
 #### OpenCode
 
-在 OpenCode 配置文件中添加（通常为 `~/.config/opencode/config.json`）：
+在 `~/.config/opencode/config.json` 中添加：
 
 ```json
 {
     "mcpServers": {
-        "figma": {
+        "aiwork": {
             "command": "node",
             "args": ["/path/to/figma-plugin/mcp-server/dist/index.js"]
         }
@@ -105,28 +102,28 @@ MCP Server 通过 stdio 协议与 AI 工具通信，由 AI 工具自动启动为
 }
 ```
 
-> 配置完成后，AI 工具启动时会自动拉起 MCP Server（含 WebSocket 服务），无需手动 `npm start`。
+### 5. 初始化工作区
 
-### 5. 启动使用
+在目标项目中，让 AI 调用 `init_workspace` 工具，会自动创建：
 
-```bash
-# 启动 MCP Server（开发调试时手动运行，正常使用由 AI 工具自动启动）
-cd mcp-server && npm start
+```
+目标项目/.aiwork/
+├── config.json              # 项目配置
+├── figma-rules.md           # Figma 代码生成规则
+├── tech-design-rules.md     # 技术方案模板
+├── requirements/            # 需求文档目录
+├── designs/                 # 技术方案目录
+├── interactions/            # 交互文档目录
+└── api/                     # API 文档目录
 ```
 
-然后：
+## 工作区配置
 
-1. 在 Figma 中打开插件
-2. 点击"连接服务器"
-3. 选中 Figma 图层（自动同步到 MCP Server）
-4. 在 AI 编程工具中请求生成代码
-
-## 配置说明
-
-### figma-to-code.config.json
+### .aiwork/config.json
 
 ```json
 {
+    "projectName": "my-app",
     "framework": "react-native",
     "styling": {
         "type": "stylesheet",
@@ -137,87 +134,111 @@ cd mcp-server && npm start
         "screenDir": "./src/screens",
         "assetDir": "./src/assets"
     },
-    "assets": {
-        "images": {
-            "outputDir": "./src/assets/images",
-            "naming": "kebab-case",
-            "scales": [1, 2, 3],
-            "reference": "require"
-        },
-        "icons": {
-            "strategy": "icon-component",
-            "componentImport": "@/components/Icon",
-            "svgDir": "./src/assets/icons"
-        }
-    },
-    "rules": "./code-rules.md",
-    "frameworkRulesDir": "./framework-rules",
-    "componentMapsDir": "./component-maps",
-    "projectRules": ".figma-rules.md"
+    "stateManagement": "zustand",
+    "networkLib": "axios",
+    "navigation": "react-navigation",
+    "docs": {
+        "requirementsDir": "requirements",
+        "designsDir": "designs",
+        "interactionsDir": "interactions",
+        "apiDir": "api"
+    }
 }
 ```
 
-### code-rules.md
-
-定义代码生成的规范，采用**三层规则机制**：
-
-1. **通用基础规则**（`code-rules.md`）：框架无关的通用规范（目录结构、命名、代码质量等）
-2. **框架规则**（`framework-rules/<framework>.md`）：框架特定规则（如 React Native 的 StyleSheet、View/Text 等）
-3. **项目级规则**（`.figma-rules.md`）：放在目标项目根目录，可覆盖/补充上述规则，优先级最高
-
-规则内容包括：
-
-- **工作流规则**：生成代码前必须先展示方案并等待用户确认
-- 命名规范
-- 布局偏好
-- 组件拆分策略
-- 框架特定规则
-
-### framework-rules/
-
-框架特定的代码生成规则，按框架命名：
-
-- `react-native.md` - React Native 规则（StyleSheet、View/Text、FlatList 等）
-- `react.md` - React/Web 规则（待添加）
-- `flutter.md` - Flutter 规则（待添加）
-
-### component-maps/
-
-框架特定的组件映射配置，按框架命名：
-
-- `react-native.json` - Figma 节点到 RN 组件的映射
-- `react.json` - Figma 节点到 React/Web 组件的映射（待添加）
-- `flutter.json` - Figma 节点到 Flutter Widget 的映射（待添加）
-
 ## MCP 工具列表
 
-| 工具名                  | 说明                          |
-| ----------------------- | ----------------------------- |
-| `get_figma_selection`   | 获取当前 Figma 选中的节点数据 |
-| `get_project_config`    | 读取项目配置                  |
-| `get_code_rules`        | 读取代码生成规则              |
-| `get_component_mapping` | 获取组件映射配置              |
-| `check_figma_changes`   | 检查设计变更（增量更新）      |
-| `save_generated_code`   | 保存生成的代码                |
-| `save_asset`            | 保存资源文件                  |
-| `get_server_status`     | 获取服务状态                  |
+### Figma 相关
 
-## 使用示例
+| 工具名                  | 说明                        |
+| ----------------------- | --------------------------- |
+| `get_figma_selection`   | 获取当前 Figma 选中的节点   |
+| `get_code_rules`        | 读取代码生成规则            |
+| `get_component_mapping` | 获取组件映射配置            |
+| `check_figma_changes`   | 检查设计变更（增量更新）    |
+| `save_generated_code`   | 保存生成的代码              |
+| `save_asset`            | 保存资源文件                |
+| `get_server_status`     | 获取服务状态                |
 
-在 AI 编程工具中：
+### 工作区相关
+
+| 工具名                 | 说明                        |
+| ---------------------- | --------------------------- |
+| `init_workspace`       | 初始化 .aiwork 工作区       |
+| `get_workspace_config` | 读取工作区配置              |
+| `list_workspace_files` | 列出工作区文件              |
+
+### 文档相关
+
+| 工具名                 | 说明                        |
+| ---------------------- | --------------------------- |
+| `get_requirement`      | 读取需求文档                |
+| `get_tech_design`      | 读取技术方案                |
+| `get_interaction_spec` | 读取交互文档                |
+| `get_api_spec`         | 读取 API 文档               |
+| `save_document`        | 保存文档                    |
+| `get_tech_design_rules`| 获取技术方案生成规则        |
+
+## 使用流程
+
+### 流程 1：需求 → 技术方案
 
 ```
-我想把当前 Figma 选中的登录页面生成 React Native 代码
+1. 将需求文档放入 .aiwork/requirements/
+2. AI 调用 get_requirement 读取需求
+3. AI 调用 get_tech_design_rules 获取模板
+4. AI 生成技术方案，调用 save_document 保存到 .aiwork/designs/
 ```
 
-AI 会自动：
+### 流程 2：技术方案 + Figma → 交互代码
 
-1. 调用 `get_project_config` 获取配置
-2. 调用 `get_code_rules` 获取代码规范
-3. 调用 `get_figma_selection` 获取设计数据
-4. 分析节点结构，展示组件拆分方案
-5. **等待用户确认方案**后再生成代码
-6. 调用 `save_generated_code` 保存到项目
+```
+1. AI 调用 get_tech_design 读取技术方案
+2. AI 调用 get_api_spec 读取 API 文档（如有）
+3. 在 Figma 中选中页面，数据自动同步
+4. AI 调用 get_figma_selection 获取设计数据
+5. AI 调用 get_code_rules 获取代码规范
+6. AI 展示组件拆分方案，等待用户确认
+7. 确认后生成带交互逻辑的代码
+```
+
+## OpenCode 快捷命令
+
+本项目提供了一套 OpenCode 自定义命令，让你可以通过简单的斜杠命令触发完整的工作流。
+
+### 安装命令
+
+将项目提供的命令模板复制到 OpenCode 全局命令目录（对所有项目生效）：
+
+```bash
+mkdir -p ~/.config/opencode/commands
+cp opencode-commands/*.md ~/.config/opencode/commands/
+```
+
+### 命令列表
+
+| 命令 | 说明 | 用法示例 |
+|------|------|----------|
+| `/aiwork-init` | 初始化 .aiwork/ 工作区 | `/aiwork-init react-native` |
+| `/aiwork-tech-design` | 需求文档 → 技术方案 | `/aiwork-tech-design user-login` |
+| `/aiwork-ui` | Figma 设计稿 → 静态 UI 代码 | `/aiwork-ui` |
+| `/aiwork-interactive` | 技术方案 + Figma → 交互代码 | `/aiwork-interactive login-design` |
+
+### 自然语言 Prompt 示例
+
+如果你使用的是 Claude Code 或其他 AI 编程工具，可以使用以下自然语言提示：
+
+**初始化工作区：**
+> 请调用 init_workspace 初始化 aiwork 工作区，框架是 react-native
+
+**生成技术方案：**
+> 请读取需求文档 user-login，根据技术方案模板生成前端技术方案，先展示大纲让我确认
+
+**Figma 转 UI 代码：**
+> 请获取当前 Figma 选中的设计稿，按照代码生成规则生成静态 UI 代码，先展示组件拆分方案让我确认
+
+**生成交互代码：**
+> 请读取技术方案 login-design 和 API 文档，结合当前 Figma 选中内容，生成带交互逻辑的完整代码，先展示方案让我确认
 
 ## 开发模式
 
