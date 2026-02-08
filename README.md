@@ -202,6 +202,44 @@ cd ../mcp-server && npm run build
 7. 确认后生成带交互逻辑的代码
 ```
 
+## OpenCode 快捷命令
+
+本项目提供了一套 OpenCode 自定义命令，让你可以通过简单的斜杠命令触发完整的工作流。
+
+### 安装命令
+
+将项目提供的命令模板复制到 OpenCode 全局命令目录（对所有项目生效）：
+
+```bash
+mkdir -p ~/.config/opencode/commands
+cp opencode-commands/*.md ~/.config/opencode/commands/
+```
+
+### 命令列表
+
+| 命令 | 说明 | 用法示例 |
+|------|------|----------|
+| `/aiwork-init` | 初始化 .aiwork/ 工作区 | `/aiwork-init react-native` |
+| `/aiwork-tech-design` | 需求文档 → 技术方案 | `/aiwork-tech-design user-login` |
+| `/aiwork-ui` | Figma 设计稿 → 静态 UI 代码 | `/aiwork-ui` |
+| `/aiwork-interactive` | 技术方案 + Figma → 交互代码 | `/aiwork-interactive login-design` |
+
+### 自然语言 Prompt 示例
+
+如果你使用的是 Claude Code 或其他 AI 编程工具，可以使用以下自然语言提示：
+
+**初始化工作区：**
+> 请调用 init_workspace 初始化 aiwork 工作区，框架是 react-native
+
+**生成技术方案：**
+> 请读取需求文档 user-login，根据技术方案模板生成前端技术方案，先展示大纲让我确认
+
+**Figma 转 UI 代码：**
+> 请获取当前 Figma 选中的设计稿，按照代码生成规则生成静态 UI 代码，先展示组件拆分方案让我确认
+
+**生成交互代码：**
+> 请读取技术方案 login-design 和 API 文档，结合当前 Figma 选中内容，生成带交互逻辑的完整代码，先展示方案让我确认
+
 ## 开发模式
 
 ```bash

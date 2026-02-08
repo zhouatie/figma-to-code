@@ -5,7 +5,6 @@ import {
     mkdirSync,
     readdirSync,
     statSync,
-    copyFileSync,
 } from 'fs';
 import { dirname, join, resolve } from 'path';
 import type { WorkspaceConfig, WorkspaceFile } from './types.js';
@@ -14,10 +13,6 @@ const WORKSPACE_DIR = '.aiwork';
 const CONFIG_FILE = 'config.json';
 const FIGMA_RULES_FILE = 'figma-rules.md';
 const TECH_RULES_FILE = 'tech-design-rules.md';
-
-function getDefaultsDir(): string {
-    return join(dirname(new URL(import.meta.url).pathname), '..', 'defaults');
-}
 
 function getWorkspacePath(projectRoot: string): string {
     return join(resolve(projectRoot), WORKSPACE_DIR);
@@ -69,12 +64,13 @@ export const workspaceTools = [
         description: `初始化 .aiwork/ 工作区目录。
 创建必要的目录结构和默认配置文件：
 - .aiwork/config.json - 项目配置
-- .aiwork/figma-rules.md - Figma 代码生成规则
-- .aiwork/tech-design-rules.md - 技术方案模板
+- .aiwork/figma-rules.md - 项目级代码规则（空模板，用于补充通用规则）
 - .aiwork/requirements/ - 需求文档目录
 - .aiwork/designs/ - 技术方案目录
 - .aiwork/interactions/ - 交互文档目录
-- .aiwork/api/ - API 文档目录`,
+- .aiwork/api/ - API 文档目录
+
+注意：通用代码规则和技术方案模板已内置在 MCP Server 中，无需复制到工作区。`,
         inputSchema: {
             type: 'object' as const,
             properties: {
@@ -130,9 +126,11 @@ export const workspaceTools = [
                     }
                 }
 
-                const defaultsDir = getDefaultsDir();
                 const defaultConfig: WorkspaceConfig = {
-                    projectName: args.projectName || dirname(resolve(projectRoot)).split('/').pop() || 'project',
+                    projectName:
+                        args.projectName ||
+                        dirname(resolve(projectRoot)).split('/').pop() ||
+                        'project',
                     framework: args.framework || 'react-native',
                     styling: {
                         type: 'stylesheet',
@@ -152,19 +150,33 @@ export const workspaceTools = [
                     },
                 };
 
-                writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
+                writeFileSync(
+                    configPath,
+                    JSON.stringify(defaultConfig, null, 2),
+                    'utf-8',
+                );
 
-                const defaultCodeRules = join(defaultsDir, 'code-rules.md');
+                // 生成空的项目级规则模板（仅用于用户补充项目特定规则）
+                // 通用规则已内置在 mcp-server/defaults/，由 get_code_rules 自动读取
                 const targetFigmaRules = join(workspacePath, FIGMA_RULES_FILE);
-                if (existsSync(defaultCodeRules) && !existsSync(targetFigmaRules)) {
-                    copyFileSync(defaultCodeRules, targetFigmaRules);
+                if (!existsSync(targetFigmaRules)) {
+                    const projectRulesTemplate = `# 项目级代码生成规则
+
+> 此文件用于补充或覆盖通用规则（优先级最高）。
+> 通用规则已内置在 MCP Server 中，无需重复配置。
+
+## 项目特定规范
+
+<!-- 在此添加项目特定的代码生成规则 -->
+`;
+                    writeFileSync(
+                        targetFigmaRules,
+                        projectRulesTemplate,
+                        'utf-8',
+                    );
                 }
 
-                const defaultTechRules = join(defaultsDir, 'tech-design-rules.md');
-                const targetTechRules = join(workspacePath, TECH_RULES_FILE);
-                if (existsSync(defaultTechRules) && !existsSync(targetTechRules)) {
-                    copyFileSync(defaultTechRules, targetTechRules);
-                }
+                // 不再复制 tech-design-rules.md，用户如需覆盖可手动创建 .aiwork/tech-design-rules.md
 
                 return {
                     success: true,
@@ -173,7 +185,6 @@ export const workspaceTools = [
                     createdFiles: [
                         configPath,
                         existsSync(targetFigmaRules) ? targetFigmaRules : null,
-                        existsSync(targetTechRules) ? targetTechRules : null,
                     ].filter(Boolean),
                     directories: dirs,
                 };
@@ -207,7 +218,8 @@ export const workspaceTools = [
                 return {
                     success: false,
                     error: 'Workspace not initialized',
-                    suggestion: 'Run init_workspace to create .aiwork/ directory',
+                    suggestion:
+                        'Run init_workspace to create .aiwork/ directory',
                 };
             }
 
@@ -247,7 +259,8 @@ export const workspaceTools = [
                 },
                 type: {
                     type: 'string',
-                    description: '过滤文件类型 (requirement, design, interaction, api)',
+                    description:
+                        '过滤文件类型 (requirement, design, interaction, api)',
                 },
             },
         },
@@ -302,12 +315,22 @@ export const workspaceTools = [
                 });
             }
 
-            const docDirs: Array<{ dir: string; type: WorkspaceFile['type'] }> = [
-                { dir: config?.docs?.requirementsDir || 'requirements', type: 'requirement' },
-                { dir: config?.docs?.designsDir || 'designs', type: 'design' },
-                { dir: config?.docs?.interactionsDir || 'interactions', type: 'interaction' },
-                { dir: config?.docs?.apiDir || 'api', type: 'api' },
-            ];
+            const docDirs: Array<{ dir: string; type: WorkspaceFile['type'] }> =
+                [
+                    {
+                        dir: config?.docs?.requirementsDir || 'requirements',
+                        type: 'requirement',
+                    },
+                    {
+                        dir: config?.docs?.designsDir || 'designs',
+                        type: 'design',
+                    },
+                    {
+                        dir: config?.docs?.interactionsDir || 'interactions',
+                        type: 'interaction',
+                    },
+                    { dir: config?.docs?.apiDir || 'api', type: 'api' },
+                ];
 
             for (const { dir, type } of docDirs) {
                 if (args.type && args.type !== type) continue;
@@ -321,10 +344,13 @@ export const workspaceTools = [
                 files,
                 summary: {
                     total: files.length,
-                    byType: files.reduce((acc, f) => {
-                        acc[f.type] = (acc[f.type] || 0) + 1;
-                        return acc;
-                    }, {} as Record<string, number>),
+                    byType: files.reduce(
+                        (acc, f) => {
+                            acc[f.type] = (acc[f.type] || 0) + 1;
+                            return acc;
+                        },
+                        {} as Record<string, number>,
+                    ),
                 },
             };
         },
