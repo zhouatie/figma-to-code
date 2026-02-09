@@ -25,8 +25,8 @@
 │  ┌─────────────────┐        ┌─────────────────────────────────┐   │
 │  │  WebSocket Server│        │         MCP Protocol            │   │
 │  │  :3001          │───────▶│  - get_figma_selection          │   │
-│  │                 │ 缓存    │  - get_project_config           │   │
-│  │ 接收 Figma 数据  │ 数据    │  - check_figma_changes          │   │
+│  │                 │ 缓存    │  - get_code_rules               │   │
+│  │ 接收 Figma 数据  │ 数据    │  - get_component_mapping        │   │
 │  └─────────────────┘        └───────────────┬─────────────────┘   │
 └─────────────────────────────────────────────┼─────────────────────┘
                                               │ stdio
@@ -495,151 +495,6 @@ const styleConverters = {
 
 ---
 
-## 5. 增量更新
-
-### 版本追踪机制
-
-基于节点 ID 的版本追踪：
-
-1. 首次生成时，记录每个节点 ID 与生成代码的映射关系
-2. 记录节点的 "内容签名" (hash)
-3. 下次同步时，对比签名，只处理变化的节点
-4. 生成 diff，智能合并到现有代码
-
-### 映射记录文件 `.figma-sync.json`
-
-```json
-{
-    "lastSync": "2024-01-15T10:30:00Z",
-    "fileKey": "abc123",
-    "nodes": {
-        "1:234": {
-            "name": "LoginScreen",
-            "hash": "a1b2c3d4e5f6",
-            "generatedFile": "src/screens/LoginScreen.tsx",
-            "generatedStyles": "src/screens/LoginScreen.styles.ts",
-            "assets": ["src/assets/images/login-bg.png"],
-            "children": ["1:235", "1:236", "1:240"]
-        },
-        "1:235": {
-            "name": "Header",
-            "hash": "f6e5d4c3b2a1",
-            "generatedFile": "src/components/Header.tsx",
-            "inlineIn": "src/screens/LoginScreen.tsx",
-            "lineRange": [15, 45]
-        }
-    }
-}
-```
-
-### 内容签名算法
-
-```typescript
-function computeNodeHash(node: FigmaNodeData): string {
-    const significantProps = {
-        type: node.type,
-        width: node.width,
-        height: node.height,
-        layoutMode: node.layoutMode,
-        fills: node.fills,
-        strokes: node.strokes,
-        effects: node.effects,
-        cornerRadius: node.cornerRadius,
-        characters: node.characters,
-        fontSize: node.fontSize,
-        fontName: node.fontName,
-        childrenHash: node.children?.map((c) => computeNodeHash(c)).join(','),
-    };
-
-    return md5(JSON.stringify(significantProps));
-}
-```
-
-### 变更检测
-
-```typescript
-interface NodeChange {
-    nodeId: string;
-    changeType: 'added' | 'modified' | 'deleted' | 'moved';
-    oldHash?: string;
-    newHash?: string;
-    affectedFiles: string[];
-}
-
-function detectChanges(
-    oldMapping: SyncMapping,
-    newNodes: FigmaNodeData[],
-): NodeChange[] {
-    const changes: NodeChange[] = [];
-    const newNodesMap = new Map(newNodes.map((n) => [n.id, n]));
-
-    // 检测修改和删除
-    for (const [nodeId, oldInfo] of Object.entries(oldMapping.nodes)) {
-        const newNode = newNodesMap.get(nodeId);
-
-        if (!newNode) {
-            changes.push({
-                nodeId,
-                changeType: 'deleted',
-                affectedFiles: [oldInfo.generatedFile, ...oldInfo.assets],
-            });
-        } else {
-            const newHash = computeNodeHash(newNode);
-            if (newHash !== oldInfo.hash) {
-                changes.push({
-                    nodeId,
-                    changeType: 'modified',
-                    oldHash: oldInfo.hash,
-                    newHash,
-                    affectedFiles: [oldInfo.generatedFile],
-                });
-            }
-            newNodesMap.delete(nodeId);
-        }
-    }
-
-    // 检测新增
-    for (const [nodeId, node] of newNodesMap) {
-        changes.push({
-            nodeId,
-            changeType: 'added',
-            newHash: computeNodeHash(node),
-            affectedFiles: [],
-        });
-    }
-
-    return changes;
-}
-```
-
-### 代码合并策略
-
-#### 方案1: 分区保护（推荐）
-
-```typescript
-// 生成的代码中标记区域
-const generatedCode = `
-// ==========  AUTO-GENERATED - DO NOT EDIT BELOW  ==========
-const styles = StyleSheet.create({
-  container: { ... },
-});
-// ==========  AUTO-GENERATED - DO NOT EDIT ABOVE  ==========
-
-// ==========  CUSTOM CODE - SAFE TO EDIT  ==========
-export const customLogic = () => {
-  // 用户自定义逻辑
-};
-// ==========  END CUSTOM CODE  ==========
-`;
-```
-
-#### 方案2: 样式与组件分离
-
--   `LoginScreen.styles.ts` ← 可以完全覆盖
--   `LoginScreen.tsx` ← 只更新 JSX 结构，保留事件处理逻辑
-
----
-
 ## 配置文件
 
 ### 项目配置 `figma-to-code.config.json`
@@ -700,8 +555,6 @@ export const customLogic = () => {
 | `get_project_config`    | 读取项目的代码生成配置                 |
 | `get_code_rules`        | 读取用户定义的代码规则（支持两层规则） |
 | `get_component_mapping` | 获取组件映射关系                       |
-| `check_figma_changes`   | 检查设计变更                           |
-| `save_generated_code`   | 保存生成的代码并更新同步记录           |
 | `save_asset`            | 保存导出的资源文件（图片、图标等）     |
 | `get_server_status`     | 获取服务状态和连接信息                 |
 

@@ -12,19 +12,15 @@ import {
     readdirSync,
 } from 'fs';
 import { dirname, join, resolve } from 'path';
-import { createHash } from 'crypto';
 import type {
     FigmaNodeData,
     ComponentMap,
-    SyncMapping,
-    NodeChange,
 } from './types.js';
 import {
     FIGMA_RULES_FILE,
     getDefaultsDir,
     getWorkspacePath,
     getConfigPath,
-    getSyncFilePath,
     readWorkspaceConfig,
 } from './constants.js';
 
@@ -258,136 +254,7 @@ export const tools = [
         },
     },
 
-    // 5. 检查设计变更
-    {
-        name: 'check_figma_changes',
-        description: `检查当前 Figma 选中内容与上次同步相比有哪些变化。
-返回新增、修改、删除的节点列表及受影响的文件。`,
-        inputSchema: {
-            type: 'object' as const,
-            properties: {},
-        },
-        handler: async () => {
-            const selection = dataStore.getSelection();
-            if (!selection) {
-                return { success: false, error: 'No selection available' };
-            }
-
-            const syncPath = getSyncFilePath();
-            const fullPath = resolve(syncPath);
-
-            if (!existsSync(fullPath)) {
-                return {
-                    success: true,
-                    isFirstSync: true,
-                    message:
-                        'No previous sync found. All nodes will be treated as new.',
-                    changes: {
-                        added: flattenNodes(selection.data).map((n) => ({
-                            nodeId: n.id,
-                            name: n.name,
-                            type: n.type,
-                        })),
-                        modified: [],
-                        deleted: [],
-                    },
-                };
-            }
-
-            try {
-                const syncData: SyncMapping = JSON.parse(
-                    readFileSync(fullPath, 'utf-8'),
-                );
-                const changes = detectChanges(syncData, selection.data);
-
-                return {
-                    success: true,
-                    isFirstSync: false,
-                    lastSync: syncData.lastSync,
-                    changes: {
-                        added: changes.filter((c) => c.changeType === 'added'),
-                        modified: changes.filter(
-                            (c) => c.changeType === 'modified',
-                        ),
-                        deleted: changes.filter(
-                            (c) => c.changeType === 'deleted',
-                        ),
-                    },
-                    summary: {
-                        totalChanges: changes.length,
-                        affectedFiles: [
-                            ...new Set(changes.flatMap((c) => c.affectedFiles)),
-                        ],
-                    },
-                };
-            } catch (error) {
-                return {
-                    success: false,
-                    error: `Failed to check changes: ${error instanceof Error ? error.message : String(error)}`,
-                };
-            }
-        },
-    },
-
-    // 6. 保存生成的代码
-    {
-        name: 'save_generated_code',
-        description: `将生成的代码保存到项目目录，并更新同步记录。`,
-        inputSchema: {
-            type: 'object' as const,
-            properties: {
-                filePath: {
-                    type: 'string',
-                    description: '文件保存路径',
-                },
-                code: {
-                    type: 'string',
-                    description: '生成的代码内容',
-                },
-                nodeId: {
-                    type: 'string',
-                    description: '关联的 Figma 节点 ID（用于增量更新追踪）',
-                },
-            },
-            required: ['filePath', 'code'],
-        },
-        handler: async (args: {
-            filePath: string;
-            code: string;
-            nodeId?: string;
-        }) => {
-            const fullPath = resolve(args.filePath);
-
-            try {
-                // 确保目录存在
-                const dir = dirname(fullPath);
-                if (!existsSync(dir)) {
-                    mkdirSync(dir, { recursive: true });
-                }
-
-                // 写入文件
-                writeFileSync(fullPath, args.code, 'utf-8');
-
-                // 如果提供了 nodeId，更新同步记录
-                if (args.nodeId) {
-                    updateSyncRecord(args.nodeId, fullPath);
-                }
-
-                return {
-                    success: true,
-                    filePath: fullPath,
-                    message: `Code saved to ${fullPath}`,
-                };
-            } catch (error) {
-                return {
-                    success: false,
-                    error: `Failed to save code: ${error instanceof Error ? error.message : String(error)}`,
-                };
-            }
-        },
-    },
-
-    // 7. 保存资源文件
+    // 5. 保存资源文件
     {
         name: 'save_asset',
         description: `保存导出的资源文件（图片、图标等）到项目目录。`,
@@ -453,7 +320,7 @@ export const tools = [
         },
     },
 
-    // 8. 获取服务状态
+    // 6. 获取服务状态
     {
         name: 'get_server_status',
         description: `获取 MCP Server 状态，包括 Figma 插件连接状态、数据缓存状态和工作区状态。`,
@@ -507,120 +374,6 @@ function countNodes(node: FigmaNodeData): number {
         }
     }
     return count;
-}
-
-function flattenNodes(node: FigmaNodeData): FigmaNodeData[] {
-    const nodes: FigmaNodeData[] = [node];
-    if (node.children) {
-        for (const child of node.children) {
-            nodes.push(...flattenNodes(child));
-        }
-    }
-    return nodes;
-}
-
-function computeNodeHash(node: FigmaNodeData): string {
-    const significantProps = {
-        type: node.type,
-        width: Math.round(node.width),
-        height: Math.round(node.height),
-        layoutMode: node.layoutMode,
-        fills: node.fills,
-        strokes: node.strokes,
-        effects: node.effects,
-        cornerRadius: node.cornerRadius,
-        characters: node.characters,
-        fontSize: node.fontSize,
-        fontName: node.fontName,
-        childrenHash: node.children?.map((c) => computeNodeHash(c)).join(','),
-    };
-
-    return createHash('md5')
-        .update(JSON.stringify(significantProps))
-        .digest('hex')
-        .slice(0, 12);
-}
-
-function detectChanges(
-    oldMapping: SyncMapping,
-    currentNode: FigmaNodeData,
-): NodeChange[] {
-    const changes: NodeChange[] = [];
-    const currentNodes = flattenNodes(currentNode);
-    const currentNodesMap = new Map(currentNodes.map((n) => [n.id, n]));
-
-    // 检测修改和删除
-    for (const [nodeId, oldInfo] of Object.entries(oldMapping.nodes)) {
-        const newNode = currentNodesMap.get(nodeId);
-
-        if (!newNode) {
-            changes.push({
-                nodeId,
-                changeType: 'deleted',
-                affectedFiles: [oldInfo.generatedFile, ...oldInfo.assets],
-            });
-        } else {
-            const newHash = computeNodeHash(newNode);
-            if (newHash !== oldInfo.hash) {
-                changes.push({
-                    nodeId,
-                    changeType: 'modified',
-                    oldHash: oldInfo.hash,
-                    newHash,
-                    affectedFiles: [oldInfo.generatedFile],
-                });
-            }
-            currentNodesMap.delete(nodeId);
-        }
-    }
-
-    // 检测新增
-    for (const [nodeId, node] of currentNodesMap) {
-        changes.push({
-            nodeId,
-            changeType: 'added',
-            newHash: computeNodeHash(node),
-            affectedFiles: [],
-        });
-    }
-
-    return changes;
-}
-
-function updateSyncRecord(nodeId: string, filePath: string): void {
-    const syncPath = getSyncFilePath();
-    
-    const dir = dirname(syncPath);
-    if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
-    }
-    
-    let syncData: SyncMapping = {
-        lastSync: new Date().toISOString(),
-        nodes: {},
-    };
-
-    if (existsSync(syncPath)) {
-        try {
-            syncData = JSON.parse(readFileSync(syncPath, 'utf-8'));
-        } catch {}
-    }
-
-    const selection = dataStore.getSelection();
-    if (selection) {
-        const node = flattenNodes(selection.data).find((n) => n.id === nodeId);
-        if (node) {
-            syncData.nodes[nodeId] = {
-                name: node.name,
-                hash: computeNodeHash(node),
-                generatedFile: filePath,
-                assets: [],
-            };
-            syncData.lastSync = new Date().toISOString();
-
-            writeFileSync(syncPath, JSON.stringify(syncData, null, 2), 'utf-8');
-        }
-    }
 }
 
 // 导出工具 schema（用于 MCP）

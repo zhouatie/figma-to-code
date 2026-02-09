@@ -11,7 +11,6 @@ export const WORKSPACE_DIR = '.aiwork';
 export const CONFIG_FILE = 'config.json';
 export const FIGMA_RULES_FILE = 'figma-rules.md';
 export const TECH_RULES_FILE = 'tech-design-rules.md';
-export const SYNC_FILE = 'figma-sync.json';
 
 // ===== 公共路径辅助函数 =====
 
@@ -34,13 +33,6 @@ export function getWorkspacePath(projectRoot: string): string {
  */
 export function getConfigPath(projectRoot: string): string {
     return join(getWorkspacePath(projectRoot), CONFIG_FILE);
-}
-
-/**
- * 获取同步记录文件路径
- */
-export function getSyncFilePath(projectRoot: string = '.'): string {
-    return join(getWorkspacePath(projectRoot), SYNC_FILE);
 }
 
 /**

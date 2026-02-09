@@ -165,33 +165,6 @@ export interface ComponentMap {
   fallback: Record<string, string>;
 }
 
-// 同步映射记录
-export interface SyncMapping {
-  lastSync: string;
-  fileKey?: string;
-  nodes: Record<string, SyncNodeInfo>;
-}
-
-export interface SyncNodeInfo {
-  name: string;
-  hash: string;
-  generatedFile: string;
-  generatedStyles?: string;
-  assets: string[];
-  children?: string[];
-  inlineIn?: string;
-  lineRange?: [number, number];
-}
-
-// 变更检测结果
-export interface NodeChange {
-  nodeId: string;
-  changeType: 'added' | 'modified' | 'deleted' | 'moved';
-  oldHash?: string;
-  newHash?: string;
-  affectedFiles: string[];
-}
-
 // ============================================================
 // AI 工作区配置 (.aiwork/)
 // ============================================================

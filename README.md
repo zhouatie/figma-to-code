@@ -155,8 +155,6 @@ cd ../mcp-server && npm run build
 | `get_figma_selection`   | 获取当前 Figma 选中的节点   |
 | `get_code_rules`        | 读取代码生成规则            |
 | `get_component_mapping` | 获取组件映射配置            |
-| `check_figma_changes`   | 检查设计变更（增量更新）    |
-| `save_generated_code`   | 保存生成的代码              |
 | `save_asset`            | 保存资源文件                |
 | `get_server_status`     | 获取服务状态                |
 
