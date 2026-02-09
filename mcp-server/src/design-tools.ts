@@ -6,35 +6,13 @@ import {
     readdirSync,
     statSync,
 } from 'fs';
-import { dirname, join, resolve, basename } from 'path';
-import type { WorkspaceConfig } from './types.js';
-
-const WORKSPACE_DIR = '.aiwork';
-const CONFIG_FILE = 'config.json';
-const TECH_RULES_FILE = 'tech-design-rules.md';
-
-function getDefaultsDir(): string {
-    return join(dirname(new URL(import.meta.url).pathname), '..', 'defaults');
-}
-
-function getWorkspacePath(projectRoot: string): string {
-    return join(resolve(projectRoot), WORKSPACE_DIR);
-}
-
-function getConfigPath(projectRoot: string): string {
-    return join(getWorkspacePath(projectRoot), CONFIG_FILE);
-}
-
-function readWorkspaceConfig(projectRoot: string): WorkspaceConfig | null {
-    const configPath = getConfigPath(projectRoot);
-    if (!existsSync(configPath)) return null;
-
-    try {
-        return JSON.parse(readFileSync(configPath, 'utf-8'));
-    } catch {
-        return null;
-    }
-}
+import { join, basename } from 'path';
+import {
+    TECH_RULES_FILE,
+    getDefaultsDir,
+    getWorkspacePath,
+    readWorkspaceConfig,
+} from './constants.js';
 
 function ensureDir(dir: string): void {
     if (!existsSync(dir)) {

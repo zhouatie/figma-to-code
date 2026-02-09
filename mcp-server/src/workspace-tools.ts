@@ -1,37 +1,20 @@
 import {
-    readFileSync,
     existsSync,
     writeFileSync,
     mkdirSync,
     readdirSync,
     statSync,
 } from 'fs';
-import { dirname, join, resolve } from 'path';
+import { join, dirname, resolve } from 'path';
 import type { WorkspaceConfig, WorkspaceFile } from './types.js';
-
-const WORKSPACE_DIR = '.aiwork';
-const CONFIG_FILE = 'config.json';
-const FIGMA_RULES_FILE = 'figma-rules.md';
-const TECH_RULES_FILE = 'tech-design-rules.md';
-
-function getWorkspacePath(projectRoot: string): string {
-    return join(resolve(projectRoot), WORKSPACE_DIR);
-}
-
-function getConfigPath(projectRoot: string): string {
-    return join(getWorkspacePath(projectRoot), CONFIG_FILE);
-}
-
-function readWorkspaceConfig(projectRoot: string): WorkspaceConfig | null {
-    const configPath = getConfigPath(projectRoot);
-    if (!existsSync(configPath)) return null;
-
-    try {
-        return JSON.parse(readFileSync(configPath, 'utf-8'));
-    } catch {
-        return null;
-    }
-}
+import {
+    CONFIG_FILE,
+    FIGMA_RULES_FILE,
+    TECH_RULES_FILE,
+    getWorkspacePath,
+    getConfigPath,
+    readWorkspaceConfig,
+} from './constants.js';
 
 function listFilesInDir(dir: string, prefix: string = ''): WorkspaceFile[] {
     const files: WorkspaceFile[] = [];

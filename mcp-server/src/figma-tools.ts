@@ -15,38 +15,18 @@ import { dirname, join, resolve } from 'path';
 import { createHash } from 'crypto';
 import type {
     FigmaNodeData,
-    WorkspaceConfig,
     ComponentMap,
     SyncMapping,
     NodeChange,
 } from './types.js';
-
-const WORKSPACE_DIR = '.aiwork';
-const CONFIG_FILE = 'config.json';
-const FIGMA_RULES_FILE = 'figma-rules.md';
-
-function getDefaultsDir(): string {
-    return join(dirname(new URL(import.meta.url).pathname), '..', 'defaults');
-}
-
-function getWorkspacePath(projectRoot: string): string {
-    return join(resolve(projectRoot), WORKSPACE_DIR);
-}
-
-function getConfigPath(projectRoot: string): string {
-    return join(getWorkspacePath(projectRoot), CONFIG_FILE);
-}
-
-function readWorkspaceConfig(projectRoot: string): WorkspaceConfig | null {
-    const configPath = getConfigPath(projectRoot);
-    if (!existsSync(configPath)) return null;
-
-    try {
-        return JSON.parse(readFileSync(configPath, 'utf-8'));
-    } catch {
-        return null;
-    }
-}
+import {
+    FIGMA_RULES_FILE,
+    getDefaultsDir,
+    getWorkspacePath,
+    getConfigPath,
+    getSyncFilePath,
+    readWorkspaceConfig,
+} from './constants.js';
 
 // ============================================================
 // 工具定义
@@ -285,20 +265,15 @@ export const tools = [
 返回新增、修改、删除的节点列表及受影响的文件。`,
         inputSchema: {
             type: 'object' as const,
-            properties: {
-                syncFilePath: {
-                    type: 'string',
-                    description: '同步记录文件路径，默认 .figma-sync.json',
-                },
-            },
+            properties: {},
         },
-        handler: async (args: { syncFilePath?: string }) => {
+        handler: async () => {
             const selection = dataStore.getSelection();
             if (!selection) {
                 return { success: false, error: 'No selection available' };
             }
 
-            const syncPath = args.syncFilePath || './.figma-sync.json';
+            const syncPath = getSyncFilePath();
             const fullPath = resolve(syncPath);
 
             if (!existsSync(fullPath)) {
@@ -613,7 +588,13 @@ function detectChanges(
 }
 
 function updateSyncRecord(nodeId: string, filePath: string): void {
-    const syncPath = resolve('./.figma-sync.json');
+    const syncPath = getSyncFilePath();
+    
+    const dir = dirname(syncPath);
+    if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+    }
+    
     let syncData: SyncMapping = {
         lastSync: new Date().toISOString(),
         nodes: {},
