@@ -382,8 +382,10 @@ const App: React.FC = () => {
 
     if (state.isMinimized) {
         return (
-            <div style={styles.minimizedBall} onClick={restoreWindow}>
-                <span style={styles.ballIcon}>F</span>
+            <div style={styles.minimizedContainer}>
+                <div style={styles.minimizedBall} onClick={restoreWindow}>
+                    <span style={styles.ballIcon}>😊</span>
+                </div>
             </div>
         );
     }
@@ -650,6 +652,13 @@ const colors = {
 };
 
 const styles: Record<string, React.CSSProperties> = {
+    minimizedContainer: {
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     minimizedBall: {
         width: 56,
         height: 56,
