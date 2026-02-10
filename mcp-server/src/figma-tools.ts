@@ -20,7 +20,6 @@ import {
     FIGMA_RULES_FILE,
     getDefaultsDir,
     getWorkspacePath,
-    getConfigPath,
     readWorkspaceConfig,
 } from './constants.js';
 
@@ -69,43 +68,7 @@ export const tools = [
         },
     },
 
-    // 2. 获取项目配置 (已废弃，改用 get_workspace_config)
-    {
-        name: 'get_project_config',
-        description: `[已废弃] 请使用 get_workspace_config 代替。
-此工具保留为向后兼容，会尝试读取 .aiwork/config.json。`,
-        inputSchema: {
-            type: 'object' as const,
-            properties: {
-                projectRoot: {
-                    type: 'string',
-                    description: '目标项目根目录，默认为当前目录',
-                },
-            },
-        },
-        handler: async (args: { projectRoot?: string }) => {
-            const projectRoot = args.projectRoot || '.';
-            const config = readWorkspaceConfig(projectRoot);
-
-            if (!config) {
-                return {
-                    success: false,
-                    error: 'Workspace not initialized',
-                    suggestion: 'Run init_workspace to create .aiwork/ directory, or use get_workspace_config',
-                };
-            }
-
-            return {
-                success: true,
-                config,
-                configPath: getConfigPath(projectRoot),
-                deprecated: true,
-                message: 'This tool is deprecated. Please use get_workspace_config instead.',
-            };
-        },
-    },
-
-    // 3. 获取代码规则
+    // 获取代码规则
     {
         name: 'get_code_rules',
         description: `读取代码生成规则 (markdown 文件)。
@@ -189,7 +152,7 @@ export const tools = [
         },
     },
 
-    // 4. 获取组件映射
+    // 获取组件映射
     {
         name: 'get_component_mapping',
         description: `获取 Figma 组件到目标框架组件的映射配置。
@@ -254,7 +217,7 @@ export const tools = [
         },
     },
 
-    // 5. 保存资源文件
+    // 保存资源文件
     {
         name: 'save_asset',
         description: `保存导出的资源文件（图片、图标等）到项目目录。`,
@@ -320,7 +283,7 @@ export const tools = [
         },
     },
 
-    // 6. 获取服务状态
+    // 获取服务状态
     {
         name: 'get_server_status',
         description: `获取 MCP Server 状态，包括 Figma 插件连接状态、数据缓存状态和工作区状态。`,

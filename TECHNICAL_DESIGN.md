@@ -552,7 +552,6 @@ const styleConverters = {
 | 工具名                  | 说明                                   |
 | ----------------------- | -------------------------------------- |
 | `get_figma_selection`   | 获取当前 Figma 选中的节点完整数据      |
-| `get_project_config`    | 读取项目的代码生成配置                 |
 | `get_code_rules`        | 读取用户定义的代码规则（支持两层规则） |
 | `get_component_mapping` | 获取组件映射关系                       |
 | `save_asset`            | 保存导出的资源文件（图片、图标等）     |
