@@ -6,9 +6,17 @@
 import { extractNodeData, exportAssets } from './extractor';
 import type { PluginMessage, UIMessage } from './types';
 
+const NORMAL_WIDTH = 360;
+const NORMAL_HEIGHT = 560;
+const MINIMIZED_SIZE = 70;
+const CORNER_PADDING = 20;
+
+let isMinimized = false;
+let lastPosition: { x: number; y: number } | null = null;
+
 figma.showUI(__html__, {
-  width: 360,
-  height: 560,
+  width: NORMAL_WIDTH,
+  height: NORMAL_HEIGHT,
   themeColors: true,
 });
 
@@ -95,6 +103,37 @@ figma.ui.onmessage = async (msg: UIMessage) => {
           nodeId: msg.nodeId,
           annotation,
         });
+      }
+      break;
+    }
+
+    case 'minimize-window': {
+      if (!isMinimized) {
+        lastPosition = figma.ui.getPosition().canvasSpace;
+        const viewport = figma.viewport.bounds;
+        const cornerX = viewport.x + viewport.width - MINIMIZED_SIZE - CORNER_PADDING;
+        const cornerY = viewport.y + viewport.height - MINIMIZED_SIZE - CORNER_PADDING;
+        
+        figma.ui.hide();
+        figma.ui.show();
+        figma.ui.resize(MINIMIZED_SIZE, MINIMIZED_SIZE);
+        figma.ui.reposition(cornerX, cornerY);
+        isMinimized = true;
+        sendToUI({ type: 'window-state-changed', minimized: true });
+      }
+      break;
+    }
+
+    case 'restore-window': {
+      if (isMinimized) {
+        figma.ui.hide();
+        figma.ui.show();
+        figma.ui.resize(NORMAL_WIDTH, NORMAL_HEIGHT);
+        if (lastPosition) {
+          figma.ui.reposition(lastPosition.x, lastPosition.y);
+        }
+        isMinimized = false;
+        sendToUI({ type: 'window-state-changed', minimized: false });
       }
       break;
     }

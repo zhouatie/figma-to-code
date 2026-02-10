@@ -10,6 +10,7 @@ interface AppState {
   assets: AssetExport[];
   lastSyncTime: string | null;
   error: string | null;
+  isMinimized: boolean;
 }
 
 interface NodeTreeItemProps {
@@ -117,6 +118,7 @@ const App: React.FC = () => {
     assets: [],
     lastSyncTime: null,
     error: null,
+    isMinimized: false,
   });
 
   const [ws, setWs] = useState<WebSocket | null>(null);
@@ -204,6 +206,10 @@ const App: React.FC = () => {
 
         case 'error':
           setState((prev) => ({ ...prev, error: msg.message }));
+          break;
+
+        case 'window-state-changed':
+          setState((prev) => ({ ...prev, isMinimized: msg.minimized }));
           break;
       }
     };
@@ -295,11 +301,32 @@ const App: React.FC = () => {
     parent.postMessage({ pluginMessage: { type: 'request-selection' } }, '*');
   }, []);
 
+  const minimizeWindow = useCallback(() => {
+    parent.postMessage({ pluginMessage: { type: 'minimize-window' } }, '*');
+  }, []);
+
+  const restoreWindow = useCallback(() => {
+    parent.postMessage({ pluginMessage: { type: 'restore-window' } }, '*');
+  }, []);
+
   const annotationCount = state.currentNode ? countAnnotations(state.currentNode) : 0;
+
+  if (state.isMinimized) {
+    return (
+      <div style={styles.minimizedBall} onClick={restoreWindow}>
+        <span style={styles.ballIcon}>F</span>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.title}>Figma to Code</h2>
+      <div style={styles.header}>
+        <h2 style={styles.title}>Figma to Code</h2>
+        <button onClick={minimizeWindow} style={styles.minimizeButton} title="最小化">
+          −
+        </button>
+      </div>
 
       <div style={styles.section}>
         <label style={styles.label}>MCP Server</label>
@@ -443,6 +470,24 @@ function getStatusText(status: ConnectionStatus): string {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  minimizedBall: {
+    width: 70,
+    height: 70,
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
+    transition: 'transform 0.2s, box-shadow 0.2s',
+  },
+  ballIcon: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: 700,
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  },
   container: {
     padding: 12,
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -452,12 +497,32 @@ const styles: Record<string, React.CSSProperties> = {
     boxSizing: 'border-box',
     overflow: 'auto',
   },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 10,
+    borderBottom: '1px solid #e5e7eb',
+  },
   title: {
     fontSize: 16,
     fontWeight: 600,
     margin: 0,
-    paddingBottom: 10,
-    borderBottom: '1px solid #e5e7eb',
+  },
+  minimizeButton: {
+    width: 24,
+    height: 24,
+    border: '1px solid #d1d5db',
+    borderRadius: 4,
+    background: '#ffffff',
+    cursor: 'pointer',
+    fontSize: 16,
+    fontWeight: 600,
+    color: '#6b7280',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    lineHeight: 1,
   },
   section: {
     marginTop: 12,

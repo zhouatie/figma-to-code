@@ -145,6 +145,7 @@ export type PluginMessage =
   | { type: 'export-complete'; assets: AssetExport[] }
   | { type: 'annotation-updated'; nodeId: string; annotation: string }
   | { type: 'annotation-loaded'; nodeId: string; annotation: string }
+  | { type: 'window-state-changed'; minimized: boolean }
   | { type: 'error'; message: string }
   | { type: 'status'; message: string };
 
@@ -154,4 +155,6 @@ export type UIMessage =
   | { type: 'set-annotation'; nodeId: string; text: string }
   | { type: 'get-annotation'; nodeId: string }
   | { type: 'connect-server'; url: string }
-  | { type: 'disconnect-server' };
+  | { type: 'disconnect-server' }
+  | { type: 'minimize-window' }
+  | { type: 'restore-window' };
