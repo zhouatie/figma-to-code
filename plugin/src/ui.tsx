@@ -102,13 +102,18 @@ const NodeTreeItem: React.FC<NodeTreeItemProps> = ({
             <div style={treeItemStyle} onClick={() => onSelectNode(node)}>
                 {hasChildren && (
                     <span
-                        style={styles.expandIcon}
+                        className="expand-icon"
+                        data-testid="expand-icon"
+                        style={{
+                            ...styles.expandIcon,
+                            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                        }}
                         onClick={(e) => {
                             e.stopPropagation();
                             onToggleExpand(node.id);
                         }}
                     >
-                        {isExpanded ? '▾' : '▸'}
+                        ▸
                     </span>
                 )}
                 {!hasChildren && <span style={styles.expandIconPlaceholder} />}
@@ -392,6 +397,12 @@ const App: React.FC = () => {
 
     return (
         <div style={styles.container}>
+            <style>{`
+                .expand-icon:hover {
+                    background: rgba(13, 148, 136, 0.12) !important;
+                    color: #0d9488 !important;
+                }
+            `}</style>
             <div style={styles.header}>
                 <h2 style={styles.title}>
                     <span style={styles.titleIcon}>F</span>
@@ -883,10 +894,10 @@ const styles: Record<string, React.CSSProperties> = {
         boxShadow: `inset 0 0 0 1.5px ${colors.primary}`,
     },
     expandIcon: {
-        width: 16,
-        height: 16,
-        fontSize: 9,
-        color: colors.textMuted,
+        width: 20,
+        height: 20,
+        fontSize: 12,
+        color: colors.textSecondary,
         cursor: 'pointer',
         flexShrink: 0,
         display: 'flex',
@@ -896,7 +907,7 @@ const styles: Record<string, React.CSSProperties> = {
         transition: 'all 0.15s ease',
     },
     expandIconPlaceholder: {
-        width: 16,
+        width: 20,
         flexShrink: 0,
     },
     treeNodeName: {
