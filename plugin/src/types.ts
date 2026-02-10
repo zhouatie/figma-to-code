@@ -154,6 +154,7 @@ export type UIMessage =
   | { type: 'export-assets'; nodeId: string }
   | { type: 'set-annotation'; nodeId: string; text: string }
   | { type: 'get-annotation'; nodeId: string }
+  | { type: 'select-node'; nodeId: string }
   | { type: 'connect-server'; url: string }
   | { type: 'disconnect-server' }
   | { type: 'minimize-window' }

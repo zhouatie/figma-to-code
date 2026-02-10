@@ -42,6 +42,19 @@ function countAnnotations(node: FigmaNodeData): number {
   return count;
 }
 
+function updateNodeAnnotation(node: FigmaNodeData, nodeId: string, annotation: string): FigmaNodeData {
+  if (node.id === nodeId) {
+    return { ...node, annotation: annotation || undefined };
+  }
+  if (node.children) {
+    return {
+      ...node,
+      children: node.children.map((child) => updateNodeAnnotation(child, nodeId, annotation)),
+    };
+  }
+  return node;
+}
+
 const NodeTreeItem: React.FC<NodeTreeItemProps> = ({
   node,
   depth,
@@ -159,6 +172,11 @@ const App: React.FC = () => {
 
       switch (msg.type) {
         case 'selection-changed':
+          if (autosaveTimerRef.current !== null) {
+            clearTimeout(autosaveTimerRef.current);
+            autosaveTimerRef.current = null;
+          }
+          setDrafts({});
           setState((prev) => ({
             ...prev,
             currentNode: msg.data,
@@ -178,23 +196,15 @@ const App: React.FC = () => {
             setActiveNodeId(null);
           }
 
-          if (ws?.readyState === WebSocket.OPEN && msg.data) {
-            ws.send(
-              JSON.stringify({
-                type: 'figma-selection',
-                data: msg.data,
-                assets: msg.assets,
-                timestamp: new Date().toISOString(),
-              })
-            );
-            setState((prev) => ({
-              ...prev,
-              lastSyncTime: new Date().toLocaleTimeString(),
-            }));
-          }
           break;
 
         case 'annotation-updated':
+          setState((prev) => ({
+            ...prev,
+            currentNode: prev.currentNode
+              ? updateNodeAnnotation(prev.currentNode, msg.nodeId, msg.annotation)
+              : null,
+          }));
           setDrafts((prev) => {
             const next = { ...prev };
             delete next[msg.nodeId];
@@ -255,6 +265,10 @@ const App: React.FC = () => {
 
   const handleSelectNode = useCallback((node: FigmaNodeData) => {
     setActiveNodeId(node.id);
+    parent.postMessage(
+      { pluginMessage: { type: 'select-node', nodeId: node.id } },
+      '*'
+    );
   }, []);
 
   const handleToggleExpand = useCallback((nodeId: string) => {
@@ -300,6 +314,23 @@ const App: React.FC = () => {
   const refreshSelection = useCallback(() => {
     parent.postMessage({ pluginMessage: { type: 'request-selection' } }, '*');
   }, []);
+
+  const syncToMCP = useCallback(() => {
+    if (ws?.readyState === WebSocket.OPEN && state.currentNode) {
+      ws.send(
+        JSON.stringify({
+          type: 'figma-selection',
+          data: state.currentNode,
+          assets: state.assets,
+          timestamp: new Date().toISOString(),
+        })
+      );
+      setState((prev) => ({
+        ...prev,
+        lastSyncTime: new Date().toLocaleTimeString(),
+      }));
+    }
+  }, [ws, state.currentNode, state.assets]);
 
   const minimizeWindow = useCallback(() => {
     parent.postMessage({ pluginMessage: { type: 'minimize-window' } }, '*');
@@ -358,6 +389,15 @@ const App: React.FC = () => {
             {getStatusText(state.connectionStatus)}
           </span>
           {state.lastSyncTime && <span style={styles.syncTime}> · 同步于 {state.lastSyncTime}</span>}
+          {state.connectionStatus === 'connected' && (
+            <button
+              onClick={syncToMCP}
+              style={{ ...styles.buttonSmall, marginLeft: 8 }}
+              disabled={!state.currentNode}
+            >
+              同步 MCP
+            </button>
+          )}
         </div>
       </div>
 
@@ -377,7 +417,7 @@ const App: React.FC = () => {
               仅标注
             </label>
             <button onClick={refreshSelection} style={styles.buttonSmall}>
-              刷新
+              导入选中节点
             </button>
           </div>
         </div>
@@ -435,9 +475,9 @@ const App: React.FC = () => {
       {state.error && <div style={styles.error}>{state.error}</div>}
 
       <div style={styles.help}>
-        <p>1. 连接 MCP Server 后，选中的节点自动同步</p>
+        <p>1. 点击"导入选中节点"获取当前 Figma 选中内容</p>
         <p>2. 在节点树中选择节点，添加标注说明给 AI</p>
-        <p>3. 标注自动保存，无需手动操作</p>
+        <p>3. 标注自动保存，点击"同步 MCP"推送给 AI</p>
       </div>
     </div>
   );

@@ -20,19 +20,6 @@ figma.showUI(__html__, {
   themeColors: true,
 });
 
-let debounceTimer: number | null = null;
-const DEBOUNCE_DELAY = 150;
-
-figma.on('selectionchange', () => {
-  if (debounceTimer !== null) {
-    clearTimeout(debounceTimer);
-  }
-  debounceTimer = setTimeout(() => {
-    handleSelectionChange();
-    debounceTimer = null;
-  }, DEBOUNCE_DELAY) as unknown as number;
-});
-
 async function handleSelectionChange(): Promise<void> {
   const selection = figma.currentPage.selection;
 
@@ -84,7 +71,6 @@ figma.ui.onmessage = async (msg: UIMessage) => {
           nodeId: msg.nodeId,
           annotation: msg.text,
         });
-        await handleSelectionChange();
       } else {
         sendToUI({
           type: 'error',
@@ -102,6 +88,19 @@ figma.ui.onmessage = async (msg: UIMessage) => {
           type: 'annotation-loaded',
           nodeId: msg.nodeId,
           annotation,
+        });
+      }
+      break;
+    }
+
+    case 'select-node': {
+      const node = figma.getNodeById(msg.nodeId);
+      if (node && 'absoluteBoundingBox' in node) {
+        figma.currentPage.selection = [node as SceneNode];
+      } else {
+        sendToUI({
+          type: 'error',
+          message: `节点不存在: ${msg.nodeId}`,
         });
       }
       break;
