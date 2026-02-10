@@ -74,6 +74,9 @@ export interface FigmaNodeData {
     vertical: 'MIN' | 'CENTER' | 'MAX' | 'STRETCH' | 'SCALE';
   };
 
+  // AI 标注 (用户添加的处理说明)
+  annotation?: string;
+
   // 子节点
   children?: FigmaNodeData[];
 }
@@ -140,11 +143,19 @@ export interface ComponentMatch {
 export type PluginMessage =
   | { type: 'selection-changed'; data: FigmaNodeData | null; assets: AssetExport[] }
   | { type: 'export-complete'; assets: AssetExport[] }
+  | { type: 'annotation-updated'; nodeId: string; annotation: string }
+  | { type: 'annotation-loaded'; nodeId: string; annotation: string }
+  | { type: 'window-state-changed'; minimized: boolean }
   | { type: 'error'; message: string }
   | { type: 'status'; message: string };
 
 export type UIMessage =
   | { type: 'request-selection' }
   | { type: 'export-assets'; nodeId: string }
+  | { type: 'set-annotation'; nodeId: string; text: string }
+  | { type: 'get-annotation'; nodeId: string }
+  | { type: 'select-node'; nodeId: string }
   | { type: 'connect-server'; url: string }
-  | { type: 'disconnect-server' };
+  | { type: 'disconnect-server' }
+  | { type: 'minimize-window' }
+  | { type: 'restore-window' };

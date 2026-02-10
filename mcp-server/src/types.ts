@@ -70,6 +70,9 @@ export interface FigmaNodeData {
     vertical: 'MIN' | 'CENTER' | 'MAX' | 'STRETCH' | 'SCALE';
   };
 
+  // AI 标注
+  annotation?: string;
+
   // 子节点
   children?: FigmaNodeData[];
 }
