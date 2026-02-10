@@ -18,6 +18,12 @@ export function extractNodeData(node: SceneNode): FigmaNodeData {
     y: node.y,
   };
 
+  // 读取 AI 标注
+  const annotation = node.getPluginData('ai-annotation');
+  if (annotation) {
+    base.annotation = annotation;
+  }
+
   // 透明度
   if ('opacity' in node) {
     base.opacity = node.opacity;

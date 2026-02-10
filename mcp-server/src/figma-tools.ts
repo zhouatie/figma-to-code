@@ -37,6 +37,7 @@ export const tools = [
 - 样式（填充、描边、圆角、阴影）
 - 文字属性（仅 TEXT 节点）
 - 组件实例信息（仅 INSTANCE 节点）
+- AI 标注（用户为节点添加的处理说明，annotation 字段）
 - 导出的资源（图片、图标）`,
         inputSchema: {
             type: 'object' as const,
@@ -63,6 +64,7 @@ export const tools = [
                 meta: {
                     nodeCount: countNodes(selection.data),
                     assetCount: selection.assets.length,
+                    annotations: collectAnnotations(selection.data),
                 },
             };
         },
@@ -337,6 +339,36 @@ function countNodes(node: FigmaNodeData): number {
         }
     }
     return count;
+}
+
+interface AnnotationSummary {
+    nodeId: string;
+    nodeName: string;
+    nodeType: string;
+    annotation: string;
+}
+
+function collectAnnotations(node: FigmaNodeData): AnnotationSummary[] {
+    const results: AnnotationSummary[] = [];
+
+    function traverse(n: FigmaNodeData): void {
+        if (n.annotation) {
+            results.push({
+                nodeId: n.id,
+                nodeName: n.name,
+                nodeType: n.type,
+                annotation: n.annotation,
+            });
+        }
+        if (n.children) {
+            for (const child of n.children) {
+                traverse(child);
+            }
+        }
+    }
+
+    traverse(node);
+    return results;
 }
 
 // 导出工具 schema（用于 MCP）
