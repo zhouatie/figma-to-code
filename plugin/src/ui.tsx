@@ -106,14 +106,16 @@ const NodeTreeItem: React.FC<NodeTreeItemProps> = ({
                         data-testid="expand-icon"
                         style={{
                             ...styles.expandIcon,
-                            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                            transform: isExpanded
+                                ? 'rotate(90deg)'
+                                : 'rotate(0deg)',
                         }}
                         onClick={(e) => {
                             e.stopPropagation();
                             onToggleExpand(node.id);
                         }}
                     >
-                        ▸
+                        ▶
                     </span>
                 )}
                 {!hasChildren && <span style={styles.expandIconPlaceholder} />}
@@ -167,6 +169,8 @@ const App: React.FC = () => {
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>(
         'idle',
     );
+    const [mcpCollapsed, setMcpCollapsed] = useState(false);
+    const [showHelp, setShowHelp] = useState(false);
     const autosaveTimerRef = useRef<number | null>(null);
 
     const findNodeById = useCallback(
@@ -280,6 +284,7 @@ const App: React.FC = () => {
 
         socket.onopen = () => {
             setState((prev) => ({ ...prev, connectionStatus: 'connected' }));
+            setMcpCollapsed(true);
         };
 
         socket.onclose = () => {
@@ -408,191 +413,276 @@ const App: React.FC = () => {
                     <span style={styles.titleIcon}>F</span>
                     Figma to Code
                 </h2>
-                <button
-                    onClick={minimizeWindow}
-                    style={styles.minimizeButton}
-                    title="最小化"
-                >
-                    −
-                </button>
+                <div style={styles.headerButtons}>
+                    <div style={{ position: 'relative' }}>
+                        <button
+                            style={styles.helpButton}
+                            title="帮助"
+                            onMouseEnter={() => setShowHelp(true)}
+                            onMouseLeave={() => setShowHelp(false)}
+                        >
+                            ?
+                        </button>
+                        {showHelp && (
+                            <div style={styles.helpTooltip}>
+                                <p>
+                                    1. 点击"导入选中节点"获取当前 Figma 选中内容
+                                </p>
+                                <p>2. 在节点树中选择节点，添加标注说明给 AI</p>
+                                <p>3. 标注自动保存，点击"同步 MCP"推送给 AI</p>
+                            </div>
+                        )}
+                    </div>
+                    <button
+                        onClick={minimizeWindow}
+                        style={styles.minimizeButton}
+                        title="最小化"
+                    >
+                        −
+                    </button>
+                </div>
             </div>
 
-            <div style={styles.section}>
-                <label style={{ ...styles.label, marginBottom: 10 }}>
-                    MCP Server
-                </label>
-                <input
-                    type="text"
-                    value={state.serverUrl}
-                    onChange={(e) =>
-                        setState((prev) => ({
-                            ...prev,
-                            serverUrl: e.target.value,
-                        }))
-                    }
-                    style={styles.input}
-                    placeholder="ws://localhost:3001"
-                />
-                <div style={styles.buttonRow}>
-                    {state.connectionStatus === 'connected' ? (
-                        <button
-                            onClick={disconnect}
-                            style={{ ...styles.button, ...styles.buttonDanger }}
+            <div style={styles.mainBody}>
+                {/* 左面板：MCP + 节点树 */}
+                <div style={styles.leftPanel}>
+                    <div style={styles.section}>
+                        <div
+                            style={styles.mcpHeader}
+                            onClick={() => setMcpCollapsed(!mcpCollapsed)}
                         >
-                            断开连接
-                        </button>
-                    ) : (
-                        <button
-                            onClick={connect}
-                            style={styles.button}
-                            disabled={state.connectionStatus === 'connecting'}
-                        >
-                            {state.connectionStatus === 'connecting'
-                                ? '连接中...'
-                                : '连接服务器'}
-                        </button>
-                    )}
-                </div>
-                <div style={styles.status}>
-                    <span
+                            <span
+                                style={{
+                                    ...styles.statusDot,
+                                    background: getStatusColor(
+                                        state.connectionStatus,
+                                    ),
+                                    boxShadow:
+                                        state.connectionStatus === 'connected'
+                                            ? `0 0 6px ${getStatusColor(state.connectionStatus)}`
+                                            : 'none',
+                                }}
+                            />
+                            <span
+                                style={{
+                                    color: getStatusColor(
+                                        state.connectionStatus,
+                                    ),
+                                    fontWeight: 500,
+                                    fontSize: 12,
+                                }}
+                            >
+                                {getStatusText(state.connectionStatus)}
+                            </span>
+                            {state.connectionStatus === 'connected' && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        syncToMCP();
+                                    }}
+                                    style={{
+                                        ...styles.buttonSmall,
+                                        marginLeft: 'auto',
+                                    }}
+                                    disabled={!state.currentNode}
+                                >
+                                    同步 MCP
+                                </button>
+                            )}
+                            <span style={styles.collapseIcon}>
+                                {mcpCollapsed ? '▶' : '▼'}
+                            </span>
+                        </div>
+
+                        {!mcpCollapsed && (
+                            <>
+                                <input
+                                    type="text"
+                                    value={state.serverUrl}
+                                    onChange={(e) =>
+                                        setState((prev) => ({
+                                            ...prev,
+                                            serverUrl: e.target.value,
+                                        }))
+                                    }
+                                    style={{ ...styles.input, marginTop: 10 }}
+                                    placeholder="ws://localhost:3001"
+                                />
+                                <div style={styles.buttonRow}>
+                                    {state.connectionStatus === 'connected' ? (
+                                        <button
+                                            onClick={disconnect}
+                                            style={{
+                                                ...styles.button,
+                                                ...styles.buttonDanger,
+                                            }}
+                                        >
+                                            断开连接
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={connect}
+                                            style={styles.button}
+                                            disabled={
+                                                state.connectionStatus ===
+                                                'connecting'
+                                            }
+                                        >
+                                            {state.connectionStatus ===
+                                            'connecting'
+                                                ? '连接中...'
+                                                : '连接服务器'}
+                                        </button>
+                                    )}
+                                </div>
+                                {state.lastSyncTime && (
+                                    <div
+                                        style={{
+                                            ...styles.syncTime,
+                                            marginTop: 8,
+                                        }}
+                                    >
+                                        同步于 {state.lastSyncTime}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+
+                    <div
                         style={{
-                            ...styles.statusDot,
-                            background: getStatusColor(state.connectionStatus),
-                            boxShadow:
-                                state.connectionStatus === 'connected'
-                                    ? `0 0 6px ${getStatusColor(state.connectionStatus)}`
-                                    : 'none',
-                        }}
-                    />
-                    <span
-                        style={{
-                            color: getStatusColor(state.connectionStatus),
-                            fontWeight: 500,
+                            ...styles.section,
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
                         }}
                     >
-                        {getStatusText(state.connectionStatus)}
-                    </span>
-                    {state.lastSyncTime && (
-                        <span style={styles.syncTime}>
-                            {' '}
-                            · 同步于 {state.lastSyncTime}
-                        </span>
-                    )}
-                    {state.connectionStatus === 'connected' && (
-                        <button
-                            onClick={syncToMCP}
-                            style={{
-                                ...styles.buttonSmall,
-                                marginLeft: 'auto',
-                            }}
-                            disabled={!state.currentNode}
-                        >
-                            同步 MCP
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            <div style={styles.section}>
-                <div style={styles.sectionHeader}>
-                    <label style={styles.label}>
-                        节点树{' '}
-                        {annotationCount > 0 && (
-                            <span style={styles.countBadge}>
-                                {annotationCount} 个标注
-                            </span>
-                        )}
-                    </label>
-                    <div style={styles.headerActions}>
-                        <label style={styles.filterLabel}>
-                            <input
-                                type="checkbox"
-                                checked={showAnnotatedOnly}
-                                onChange={(e) =>
-                                    setShowAnnotatedOnly(e.target.checked)
-                                }
-                                style={styles.checkbox}
-                            />
-                            仅标注
-                        </label>
-                        <button
-                            onClick={refreshSelection}
-                            style={styles.buttonSmall}
-                        >
-                            导入选中节点
-                        </button>
-                    </div>
-                </div>
-
-                {state.currentNode ? (
-                    <div style={styles.treeContainer}>
-                        <NodeTreeItem
-                            node={state.currentNode}
-                            depth={0}
-                            activeNodeId={activeNodeId}
-                            expandedNodes={expandedNodes}
-                            showAnnotatedOnly={showAnnotatedOnly}
-                            onSelectNode={handleSelectNode}
-                            onToggleExpand={handleToggleExpand}
-                        />
-                    </div>
-                ) : (
-                    <div style={styles.placeholder}>
-                        请在 Figma 中选中一个图层
-                    </div>
-                )}
-            </div>
-
-            <div style={styles.section}>
-                <div style={styles.sectionHeader}>
-                    <label style={styles.label}>
-                        AI 标注
-                        {activeNode && (
-                            <span style={styles.activeNodeName}>
-                                {' '}
-                                - {activeNode.name}
-                            </span>
-                        )}
-                    </label>
-                    <div style={styles.saveStatusContainer}>
-                        {saveStatus === 'saving' && (
-                            <span style={styles.savingText}>保存中...</span>
-                        )}
-                        {saveStatus === 'saved' && (
-                            <span style={styles.savedText}>✓ 已保存</span>
-                        )}
-                        {isDirty && saveStatus === 'idle' && (
-                            <span style={styles.dirtyText}>未保存</span>
-                        )}
-                    </div>
-                </div>
-
-                {activeNode ? (
-                    <div>
-                        <textarea
-                            value={currentAnnotation}
-                            onChange={handleAnnotationChange}
-                            style={styles.textarea}
-                            placeholder="输入给 AI 的处理说明，如：这个列表需要支持下拉刷新和分页加载..."
-                            rows={4}
-                        />
-                        <div style={styles.charCount}>
-                            {currentAnnotation.length} / {MAX_ANNOTATION_LENGTH}
+                        <div style={styles.sectionHeader}>
+                            <label style={styles.label}>
+                                节点树{' '}
+                                {annotationCount > 0 && (
+                                    <span style={styles.countBadge}>
+                                        {annotationCount} 个标注
+                                    </span>
+                                )}
+                            </label>
+                            <div style={styles.headerActions}>
+                                <label style={styles.filterLabel}>
+                                    <input
+                                        type="checkbox"
+                                        checked={showAnnotatedOnly}
+                                        onChange={(e) =>
+                                            setShowAnnotatedOnly(
+                                                e.target.checked,
+                                            )
+                                        }
+                                        style={styles.checkbox}
+                                    />
+                                    仅标注
+                                </label>
+                                <button
+                                    onClick={refreshSelection}
+                                    style={styles.buttonSmall}
+                                >
+                                    导入选中节点
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                ) : (
-                    <div style={styles.placeholder}>
-                        请在上方节点树中选择要标注的节点
-                    </div>
-                )}
-            </div>
 
-            {state.error && <div style={styles.error}>{state.error}</div>}
+                        {state.currentNode ? (
+                            <div style={styles.treeContainer}>
+                                <NodeTreeItem
+                                    node={state.currentNode}
+                                    depth={0}
+                                    activeNodeId={activeNodeId}
+                                    expandedNodes={expandedNodes}
+                                    showAnnotatedOnly={showAnnotatedOnly}
+                                    onSelectNode={handleSelectNode}
+                                    onToggleExpand={handleToggleExpand}
+                                />
+                            </div>
+                        ) : (
+                            <div style={styles.placeholder}>
+                                请在 Figma 中选中一个图层
+                            </div>
+                        )}
+                    </div>
+                </div>
 
-            <div style={styles.help}>
-                <p>1. 点击"导入选中节点"获取当前 Figma 选中内容</p>
-                <p>2. 在节点树中选择节点，添加标注说明给 AI</p>
-                <p>3. 标注自动保存，点击"同步 MCP"推送给 AI</p>
+                <div style={styles.divider} />
+
+                {/* 右面板：标注区 */}
+                <div style={styles.rightPanel}>
+                    <div
+                        style={{
+                            ...styles.section,
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                        }}
+                    >
+                        <div style={styles.sectionHeader}>
+                            <label style={styles.label}>
+                                AI 标注
+                                {activeNode && (
+                                    <span style={styles.activeNodeName}>
+                                        {' '}
+                                        - {activeNode.name}
+                                    </span>
+                                )}
+                            </label>
+                            <div style={styles.saveStatusContainer}>
+                                {saveStatus === 'saving' && (
+                                    <span style={styles.savingText}>
+                                        保存中...
+                                    </span>
+                                )}
+                                {saveStatus === 'saved' && (
+                                    <span style={styles.savedText}>
+                                        ✓ 已保存
+                                    </span>
+                                )}
+                                {isDirty && saveStatus === 'idle' && (
+                                    <span style={styles.dirtyText}>未保存</span>
+                                )}
+                            </div>
+                        </div>
+
+                        {activeNode ? (
+                            <div
+                                style={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                }}
+                            >
+                                <textarea
+                                    value={currentAnnotation}
+                                    onChange={handleAnnotationChange}
+                                    style={{
+                                        ...styles.textarea,
+                                        flex: 1,
+                                        height: '100%',
+                                    }}
+                                    placeholder="输入给 AI 的处理说明，如：这个列表需要支持下拉刷新和分页加载..."
+                                    rows={4}
+                                />
+                                <div style={styles.charCount}>
+                                    {currentAnnotation.length} /{' '}
+                                    {MAX_ANNOTATION_LENGTH}
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={styles.placeholder}>
+                                请在左侧节点树中选择要标注的节点
+                            </div>
+                        )}
+                    </div>
+
+                    {state.error && (
+                        <div style={styles.error}>{state.error}</div>
+                    )}
+                </div>
             </div>
         </div>
     );
@@ -696,25 +786,53 @@ const styles: Record<string, React.CSSProperties> = {
     },
 
     container: {
-        padding: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
         fontFamily:
             '"SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         fontSize: 13,
         color: colors.textPrimary,
-        height: '100%',
         boxSizing: 'border-box',
-        overflow: 'auto',
         background: `linear-gradient(180deg, ${colors.bgPrimary} 0%, ${colors.bgSecondary} 100%)`,
         letterSpacing: '-0.01em',
+    },
+    mainBody: {
+        display: 'flex',
+        flexDirection: 'row',
+        flex: 1,
+        overflow: 'hidden',
+    },
+    leftPanel: {
+        flex: 1.2,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'auto',
+        padding: 16,
+        paddingRight: 8,
+        minWidth: 280,
+    },
+    rightPanel: {
+        flex: 0.8,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'auto',
+        padding: 16,
+        paddingLeft: 8,
+    },
+    divider: {
+        width: 1,
+        background: colors.border,
+        flexShrink: 0,
     },
 
     header: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingBottom: 14,
-        marginBottom: 2,
+        padding: '12px 16px',
         borderBottom: `1px solid ${colors.border}`,
+        flexShrink: 0,
     },
     title: {
         fontSize: 15,
@@ -753,6 +871,43 @@ const styles: Record<string, React.CSSProperties> = {
         justifyContent: 'center',
         lineHeight: 1,
         transition: 'all 0.2s ease',
+    },
+    headerButtons: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+    },
+    helpButton: {
+        width: 28,
+        height: 28,
+        border: 'none',
+        borderRadius: 8,
+        background: colors.bgSecondary,
+        cursor: 'pointer',
+        fontSize: 14,
+        fontWeight: 500,
+        color: colors.textMuted,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        lineHeight: 1,
+        transition: 'all 0.2s ease',
+    },
+    helpTooltip: {
+        position: 'absolute',
+        top: '100%',
+        right: 0,
+        marginTop: 8,
+        padding: '12px 14px',
+        fontSize: 11,
+        color: colors.textSecondary,
+        lineHeight: 1.7,
+        background: colors.bgTertiary,
+        borderRadius: 10,
+        boxShadow: colors.shadowMedium,
+        border: `1px solid ${colors.border}`,
+        whiteSpace: 'nowrap',
+        zIndex: 100,
     },
 
     section: {
@@ -868,10 +1023,23 @@ const styles: Record<string, React.CSSProperties> = {
         color: colors.textMuted,
         fontSize: 11,
     },
+    mcpHeader: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        cursor: 'pointer',
+        padding: '4px 0',
+    },
+    collapseIcon: {
+        fontSize: 12,
+        color: colors.textMuted,
+        marginLeft: 8,
+        transition: 'transform 0.15s ease',
+    },
 
     treeContainer: {
-        maxHeight: 180,
-        overflowY: 'auto',
+        flex: 1,
+        overflow: 'auto',
         border: `1px solid ${colors.border}`,
         borderRadius: 10,
         background: colors.bgPrimary,
@@ -975,7 +1143,6 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: 13,
         resize: 'vertical',
         boxSizing: 'border-box',
-        minHeight: 100,
         fontFamily: 'inherit',
         background: colors.bgPrimary,
         color: colors.textPrimary,
@@ -1047,14 +1214,14 @@ const styles: Record<string, React.CSSProperties> = {
     },
 
     help: {
-        marginTop: 16,
-        padding: '12px 14px',
+        padding: '10px 16px',
         fontSize: 11,
         color: colors.textMuted,
         lineHeight: 1.7,
         background: colors.bgSecondary,
-        borderRadius: 10,
         letterSpacing: '-0.01em',
+        borderTop: `1px solid ${colors.border}`,
+        flexShrink: 0,
     },
     helpStep: {
         display: 'flex',
