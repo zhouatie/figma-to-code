@@ -6,8 +6,8 @@
 import { extractNodeData, exportAssets } from './extractor';
 import type { PluginMessage, UIMessage } from './types';
 
-const NORMAL_WIDTH = 360;
-const NORMAL_HEIGHT = 560;
+const NORMAL_WIDTH = 640;
+const NORMAL_HEIGHT = 480;
 const MINIMIZED_SIZE = 70;
 const CORNER_PADDING = 20;
 

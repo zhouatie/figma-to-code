@@ -76,7 +76,7 @@ export const tools = [
         description: `读取代码生成规则 (markdown 文件)。
 规则来源：
 1. 默认规则（内置 defaults/code-rules.md）
-2. 框架规则（内置 defaults/framework-rules/<framework>.md，暂未实现）
+2. 框架规则（framework-rules/<framework>.md，或内置 defaults/framework-rules/<framework>.md）
 3. 项目级规则（.aiwork/figma-rules.md，优先级最高）
 返回合并后的规则内容。`,
         inputSchema: {
@@ -108,10 +108,13 @@ export const tools = [
             framework = framework || 'react-native';
 
             let baseRules = '';
+            let frameworkRules = '';
             let projectRules = '';
             let baseFullPath = '';
+            let frameworkFullPath = '';
             let projectFullPath = '';
 
+            // Layer 1: 通用基础规则
             const defaultRulesPath = join(defaultsDir, 'code-rules.md');
             if (existsSync(defaultRulesPath)) {
                 try {
@@ -120,6 +123,22 @@ export const tools = [
                 } catch {}
             }
 
+            // Layer 2: 框架规则（优先项目根目录，fallback 到 defaults）
+            const frameworkRulesPaths = [
+                join(resolve(projectRoot), 'framework-rules', `${framework}.md`),
+                join(defaultsDir, 'framework-rules', `${framework}.md`),
+            ];
+            for (const frPath of frameworkRulesPaths) {
+                if (existsSync(frPath)) {
+                    try {
+                        frameworkRules = readFileSync(frPath, 'utf-8');
+                        frameworkFullPath = frPath;
+                        break;
+                    } catch {}
+                }
+            }
+
+            // Layer 3: 项目级规则
             const projectRulesPath = join(workspacePath, FIGMA_RULES_FILE);
             if (existsSync(projectRulesPath)) {
                 try {
@@ -128,7 +147,7 @@ export const tools = [
                 } catch {}
             }
 
-            if (!baseRules && !projectRules) {
+            if (!baseRules && !frameworkRules && !projectRules) {
                 return {
                     success: false,
                     error: 'No rules files found.',
@@ -137,6 +156,10 @@ export const tools = [
             }
 
             let mergedRules = baseRules;
+
+            if (frameworkRules) {
+                mergedRules += `\n\n---\n\n# 框架规则（${framework}）\n\n> 以下规则来自框架配置（${frameworkFullPath}），优先级高于通用规则\n\n${frameworkRules}`;
+            }
 
             if (projectRules) {
                 mergedRules += `\n\n---\n\n# 项目级规则\n\n> 以下规则来自项目配置（${projectFullPath}），优先级最高\n\n${projectRules}`;
@@ -148,6 +171,7 @@ export const tools = [
                 framework,
                 layers: {
                     base: baseFullPath || null,
+                    framework: frameworkFullPath || null,
                     project: projectFullPath || null,
                 },
             };
