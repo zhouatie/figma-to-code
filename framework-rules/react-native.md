@@ -64,12 +64,10 @@ const styles = StyleSheet.create({
 });
 
 interface PageNameProps {
-    navigation?: any;
+    // navigation prop 类型取决于项目的导航库配置
 }
 
-export default function PageName({
-    navigation,
-}: PageNameProps): React.ReactElement {
+export default function PageName({}: PageNameProps): React.ReactElement {
     return <View style={styles.container}>{/* 页面内容 */}</View>;
 }
 ```
@@ -277,8 +275,8 @@ const styles = StyleSheet.create({
   },
   sheetContainer: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 16 * rem,
-    borderTopRightRadius: 16 * rem,
+    borderTopLeftRadius: 16,  // 如项目使用 rem 缩放，替换为 16 * rem
+    borderTopRightRadius: 16,
   },
 });
 ```
@@ -298,8 +296,8 @@ const toggleExpand = useCallback(() => {
 
 ```tsx
 const NUM_COLUMNS = 3;
-const PADDING = 16 * rem;
-const GAP = 8 * rem;
+const PADDING = 16;   // 如项目使用 rem 缩放，替换为 16 * rem
+const GAP = 8;        // 如项目使用 rem 缩放，替换为 8 * rem
 const ITEM_WIDTH =
   (SCREEN_WIDTH - PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 ```
@@ -331,10 +329,16 @@ useEffect(() => {
 ### 混合字体文本
 
 ```tsx
-// 数字用 Outfit，汉字用 PingFang
-<View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-  <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 24 * rem }}>7</Text>
-  <Text style={{ fontFamily: 'PingFangSC-Regular', fontSize: 14 * rem }}>天</Text>
+// 数字用 Outfit，汉字用 PingFang — 使用 StyleSheet 而非内联样式
+const styles = StyleSheet.create({
+  mixedTextRow: { flexDirection: 'row', alignItems: 'baseline' },
+  numberText: { fontFamily: 'Outfit-Bold', fontSize: 24 },   // 如项目使用 rem 缩放，乘以 rem
+  unitText: { fontFamily: 'PingFangSC-Regular', fontSize: 14 },
+});
+
+<View style={styles.mixedTextRow}>
+  <Text style={styles.numberText}>7</Text>
+  <Text style={styles.unitText}>天</Text>
 </View>
 ```
 
