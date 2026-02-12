@@ -148,28 +148,91 @@ import CardItem from './components/CardItem';
 
 ### 列表选择
 
-| 场景                      | 推荐组件               |
-| ------------------------- | ---------------------- |
-| 长列表（同类型数据）      | `FlatList`             |
-| 分组列表                  | `SectionList`          |
-| 短列表（< 20 项静态内容） | `ScrollView` + `map()` |
+| 场景                          | 推荐组件                        | 说明                                                         |
+| ----------------------------- | ------------------------------- | ------------------------------------------------------------ |
+| 长列表（> 50 项同类型）       | `FlashList` / `AnimatedFlashList` | 性能最优，需指定 `estimatedItemSize`                         |
+| 普通列表（20-50 项）          | `FlatList`                      | RN 内置，兼容性好                                            |
+| 分组列表                      | `SectionList`                   | 有分组头部的场景                                             |
+| 短列表（< 20 项静态内容）     | `ScrollView` + `map()`          | 简单场景                                                     |
+| 多列网格                      | `FlashList` + `numColumns`      | 计算 `itemWidth = (screenWidth - padding - gaps) / numColumns` |
+| 需要动画的长列表              | `AnimatedFlashList`             | 配合 `reanimated` 使用                                       |
 
 ---
 
 ## 6. Figma 特性映射
 
-| Figma 特性    | React Native 处理                     |
-| ------------- | ------------------------------------- |
-| FRAME         | `View`                                |
-| TEXT          | `Text`                                |
-| RECTANGLE     | `View`                                |
-| ELLIPSE       | `View` (with borderRadius)            |
-| IMAGE         | `Image`                               |
-| GROUP         | `View`                                |
-| 线性渐变      | `react-native-linear-gradient`        |
-| 模糊效果      | `@react-native-community/blur` 或跳过 |
-| 内阴影        | 跳过或使用图片替代                    |
-| 复杂路径/矢量 | 导出为 SVG，使用 `react-native-svg`   |
+### 基础映射
+
+| Figma 特性        | React Native 处理                                                |
+| ----------------- | ---------------------------------------------------------------- |
+| FRAME             | `View`                                                           |
+| TEXT              | `Text`（**必须读取 `characters` 字段，非 `name`**）              |
+| RECTANGLE         | `View`（with borderRadius if needed）                            |
+| ELLIPSE           | `View`（with `borderRadius: width / 2`）                        |
+| IMAGE             | `Image` / `FastImage`                                            |
+| GROUP             | `View`（通常可展平，不一定需要额外包裹）                        |
+| VECTOR            | 导出为 CDN 图片，**不用 react-native-svg 重建**                 |
+| BOOLEAN_OPERATION | **CDN Image / ImageBackground**（禁止代码还原路径运算）         |
+| INSTANCE          | 根据 `variantProperties` 映射到动态数据组件                     |
+
+### 复合模式映射
+
+| Figma 模式                                         | React Native 实现                                            |
+| -------------------------------------------------- | ------------------------------------------------------------ |
+| 全屏 FRAME + 半透明背景 + 底部圆角内容             | `Modal` / `DraggableSheet` 底部弹出层                        |
+| 多个结构相同的 GROUP / FRAME                       | `FlatList` / `FlashList` + `renderItem` 数据驱动             |
+| FRAME（layoutMode=NONE）                           | 按 Y 坐标分组推断 Flex 布局                                  |
+| FRAME 含背景 IMAGE + 装饰层                        | `ImageBackground` + CDN                                      |
+| 重叠的两个 RECTANGLE（不同宽度）                   | 进度条：外层 `View` + 内层 `View`（width 动态计算）          |
+| 线性渐变 fills                                     | `LinearGradient` 组件                                        |
+| 渐变 fills 应用于 TEXT                             | iOS: `MaskedView` + `LinearGradient`；Android: 降级纯色      |
+| 多个 TEXT 节点不同 fontFamily                      | 多个 `<Text>` 并排，`flexDirection: 'row'` + `alignItems: 'baseline'` |
+
+### 应跳过的节点
+
+| 节点特征                              | 原因                              |
+| ------------------------------------- | --------------------------------- |
+| name 含 "Status Bar" / "StatusBar"    | 系统状态栏，由导航组件管理        |
+| name 含 "Home Indicator"             | 系统安全区，自动处理              |
+| 大量排列的 ELLIPSE（装饰点阵）       | 合并为 CDN 背景图                 |
+| opacity = 0 的节点                    | 隐藏元素，跳过                    |
+
+---
+
+## 6.5 平台差异处理
+
+### 渐变文字
+
+```tsx
+import { Platform } from 'react-native';
+
+// iOS - 使用 MaskedView + LinearGradient
+{Platform.OS === 'ios' ? (
+  <MaskedView maskElement={<Text style={styles.gradientText}>{text}</Text>}>
+    <LinearGradient colors={['#FF6B6B', '#FFD93D']}>
+      <Text style={[styles.gradientText, { opacity: 0 }]}>{text}</Text>
+    </LinearGradient>
+  </MaskedView>
+) : (
+  // Android - 降级为纯色（取渐变首色）
+  <Text style={[styles.gradientText, { color: '#FF6B6B' }]}>{text}</Text>
+)}
+```
+
+### 模糊效果
+
+-   iOS：使用 `BlurView`（`@react-native-community/blur`）
+-   Android：降级为 `Image`（模糊处理后的图片）+ 半透明 `View` 覆盖层
+
+### 常见平台差异速查
+
+| 场景         | iOS                             | Android                          |
+| ------------ | ------------------------------- | -------------------------------- |
+| 渐变文字     | MaskedView + LinearGradient     | 降级为纯色                       |
+| 阴影         | shadowColor/Offset/Opacity/Radius | elevation                      |
+| 模糊背景     | BlurView                        | Image + overlay 降级             |
+| fontWeight   | 支持 '100'-'900'                | 部分机型仅 'normal' / 'bold'    |
+| 内阴影       | 跳过或使用图片替代              | 跳过或使用图片替代               |
 
 ---
 
@@ -193,13 +256,118 @@ fontSize: 13 * rem,
 
 ---
 
-## 8. 检查清单
+## 8. 常用模式参考
+
+### Bottom Sheet / Modal 弹窗
+
+```tsx
+<Modal visible={visible} transparent animationType="slide">
+  <View style={styles.overlay}>
+    <View style={styles.sheetContainer}>
+      {/* 内容 */}
+    </View>
+  </View>
+</Modal>
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  sheetContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16 * rem,
+    borderTopRightRadius: 16 * rem,
+  },
+});
+```
+
+### 展开 / 收起动画
+
+```tsx
+import { LayoutAnimation } from 'react-native';
+
+const toggleExpand = useCallback(() => {
+  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  setExpanded((prev) => !prev);
+}, []);
+```
+
+### 多列网格计算
+
+```tsx
+const NUM_COLUMNS = 3;
+const PADDING = 16 * rem;
+const GAP = 8 * rem;
+const ITEM_WIDTH =
+  (SCREEN_WIDTH - PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
+```
+
+### 图片预加载（弹窗背景）
+
+```tsx
+useEffect(() => {
+  Image.prefetch(BG_CDN_URL);
+}, []);
+```
+
+### 条件渲染（VIP / 非 VIP）
+
+```tsx
+// 根据 Figma 帧名称中的状态信息推断条件分支
+{isVip ? <VipContent /> : <NormalContent />}
+```
+
+### 进度条
+
+```tsx
+// Figma 中表现为两个重叠的 RECTANGLE
+<View style={styles.progressBg}>
+  <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+</View>
+```
+
+### 混合字体文本
+
+```tsx
+// 数字用 Outfit，汉字用 PingFang
+<View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+  <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 24 * rem }}>7</Text>
+  <Text style={{ fontFamily: 'PingFangSC-Regular', fontSize: 14 * rem }}>天</Text>
+</View>
+```
+
+---
+
+## 9. 检查清单
 
 生成 React Native 代码后，确认：
 
+### 基础规范
+
 -   [ ] 样式使用 `StyleSheet.create()` 而非内联
--   [ ] 文字都包裹在 `<Text>` 中
+-   [ ] 所有文字包裹在 `<Text>` 中
 -   [ ] 图片设置了明确的宽高
 -   [ ] 可点击元素使用 `TouchableOpacity` 或 `Pressable`
--   [ ] 长列表使用 `FlatList` 而非 `ScrollView` + `map()`
--   [ ] iOS/Android 阴影分别处理
+
+### Figma 节点处理
+
+-   [ ] TEXT 节点使用 `characters` 而非 `name` 获取文本内容
+-   [ ] BOOLEAN_OPERATION 节点全部使用 CDN 图片，未尝试代码还原
+-   [ ] INSTANCE 重复节点使用数据驱动渲染（`map` / `FlatList`）
+-   [ ] `layoutMode=NONE` 的 FRAME 已推断为合理的 Flex 布局
+-   [ ] 装饰性复杂节点（点阵、渐变叠加）已合并为 CDN 图片
+-   [ ] StatusBar、Home Indicator 节点已跳过
+
+### 性能
+
+-   [ ] 长列表使用 `FlashList` / `FlatList` 而非 `ScrollView` + `map()`
+-   [ ] 弹窗 CDN 背景考虑了 `Image.prefetch`
+-   [ ] 列表项组件使用 `memo` 包裹
+
+### 平台兼容
+
+-   [ ] iOS / Android 阴影分别处理
+-   [ ] 渐变文字处理了 iOS / Android 差异
+-   [ ] `fontWeight` 考虑了 Android 兼容性
